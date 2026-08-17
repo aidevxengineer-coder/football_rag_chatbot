@@ -4,7 +4,7 @@ import pytest
 @pytest.mark.asyncio
 async def test_post_user_message_triggers_rag(chat_client, mocker):
     mocker.patch(
-        "services.chat.routes.run_pipeline_sync",
+        "services.chat.pipeline_runner.run_pipeline_sync",
         return_value={
             "reply": "They won 2-1.",
             "snapshot": "{}",
@@ -27,5 +27,10 @@ async def test_post_user_message_triggers_rag(chat_client, mocker):
     assert response.status_code == 200
     body = response.json()["data"]
     assert body["message"]["role"] == "user"
-    assert body["assistant_message"]["content"] == "They won 2-1."
-    assert body["run_id"] == 7
+    assert body["assistant_message"] is None
+    assert body["tool_notice_code"] == "PIPELINE_RUNNING"
+
+    messages = await chat_client.get(f"/chats/{chat_id}/messages")
+    assert messages.status_code == 200
+    stored = messages.json()["data"]["messages"]
+    assert any(m["role"] == "assistant" and m["content"] == "They won 2-1." for m in stored)

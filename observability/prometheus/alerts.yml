@@ -1,0 +1,70 @@
+groups:
+  - name: futbot_service_alerts
+    interval: 30s
+    rules:
+      - alert: HighErrorRate
+        expr: |
+          sum by (job) (rate(futbot_http_requests_total{status=~"5.."}[5m]))
+            /
+          sum by (job) (rate(futbot_http_requests_total[5m]))
+            > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} has a 5xx error rate above 5% (last 5m)"
+
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum by (job, le) (rate(futbot_http_request_duration_seconds_bucket[5m]))
+          ) > 2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.job }} p95 request latency above 2s (last 10m)"
+
+      - alert: ServiceDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} is not responding to /metrics scrapes"
+
+  - name: futbot_rag_alerts
+    interval: 30s
+    rules:
+      - alert: LLMCallFailureSpike
+        expr: |
+          sum(rate(futbot_llm_calls_total{status="error"}[5m]))
+            /
+          sum(rate(futbot_llm_calls_total[5m]))
+            > 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "LLM call error rate above 10% (last 5m) -- chat responses are likely failing"
+
+      - alert: IngestionJobFailureSpike
+        expr: |
+          sum(rate(futbot_ingestion_jobs_total{status="error"}[15m]))
+            /
+          sum(rate(futbot_ingestion_jobs_total[15m]))
+            > 0.2
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Ingestion job unexpected-failure rate above 20% (last 15m)"
+
+      - alert: RetrievalReturningNoChunks
+        expr: |
+          histogram_quantile(0.5, sum by (le) (rate(futbot_retrieval_chunks_returned_bucket[15m]))) == 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Median retrieval call is returning 0 chunks over the last 15m -- check the index/query pipeline"

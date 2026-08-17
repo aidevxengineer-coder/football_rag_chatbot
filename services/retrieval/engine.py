@@ -1,5 +1,6 @@
 from typing import Any
 
+from services.retrieval.dense import GLOBAL_PROJECT_KEY
 from services.retrieval.bm25 import BM25Store
 from services.retrieval.dense import DenseStore
 from services.retrieval.rrf import reciprocal_rank_fusion
@@ -47,13 +48,30 @@ class RetrievalEngine:
         return len(chunk_ids)
 
     def retrieve(
-        self, query: str, top_k: int = 5, project_id: str | None = None
+        self,
+        query: str,
+        top_k: int = 5,
+        project_id: str | None = None,
+        project_ids: list[str] | None = None,
     ) -> list[dict[str, Any]]:
-        dense_hits = self.dense.query(query, top_k=top_k * 3, project_id=project_id)
-        try:
-            sparse_hits = self.bm25.search(query, top_k=top_k * 3, project_id=project_id)
-        except RuntimeError:
-            sparse_hits = []
+        scopes = project_ids
+        if scopes is None:
+            scopes = [project_id] if project_id is not None else [None]
+
+        dense_hits: list[dict[str, Any]] = []
+        sparse_hits: list[dict[str, Any]] = []
+        for scope in scopes:
+            dense_pid = None if scope == GLOBAL_PROJECT_KEY else scope
+            bm25_pid = None if scope == GLOBAL_PROJECT_KEY else scope
+            dense_hits.extend(
+                self.dense.query(query, top_k=top_k * 3, project_id=dense_pid)
+            )
+            try:
+                sparse_hits.extend(
+                    self.bm25.search(query, top_k=top_k * 3, project_id=bm25_pid)
+                )
+            except RuntimeError:
+                pass
 
         fused = reciprocal_rank_fusion(dense_hits, sparse_hits, top_k=top_k)
         return [citation_from_result(r) for r in fused]

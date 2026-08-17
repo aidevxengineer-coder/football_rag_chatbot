@@ -54,6 +54,16 @@ def test_bm25_save_and_load(tmp_path):
     assert results[0]["chunk_id"] == "2"
 
 
+def test_bm25_load_corrupt_file_returns_false(tmp_path):
+    save_path = str(tmp_path / "bm25.pkl")
+    with open(save_path, "wb") as f:
+        f.write(b"truncated")
+
+    loaded = BM25Store()
+    assert loaded.load(save_path) is False
+    assert loaded.is_loaded() is False
+
+
 def test_bm25_filters_by_project_id():
     store = BM25Store()
     store.add_chunks(

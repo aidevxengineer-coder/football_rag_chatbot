@@ -18,6 +18,8 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from futbot_common.context import get_correlation_id
+
 from services.observability.config import settings
 
 DB_PATH = settings.db_path
@@ -187,12 +189,21 @@ def _migrate_ingestion_chunks_schema(conn: sqlite3.Connection):
 
 
 def _migrate_pipeline_runs_schema(conn: sqlite3.Connection):
-    """Add snapshot columns to existing databases."""
+    """Add snapshot/tracing columns to existing databases."""
     columns = {row[1] for row in conn.execute("PRAGMA table_info(pipeline_runs)").fetchall()}
     if "snapshot_text" not in columns:
         conn.execute("ALTER TABLE pipeline_runs ADD COLUMN snapshot_text TEXT")
     if "snapshot_token_count" not in columns:
         conn.execute("ALTER TABLE pipeline_runs ADD COLUMN snapshot_token_count INTEGER")
+    if "correlation_id" not in columns:
+        # Links this pipeline run to the OpenTelemetry trace ID / HTTP
+        # X-Correlation-ID for the same request (see
+        # futbot_common.middleware.CorrelationIdMiddleware). Populated at
+        # PipelineRunLogger.__enter__() time via get_correlation_id().
+        # Lets you jump: gateway/service logs <-> Jaeger trace <-> this
+        # pipeline run's full LLM/retrieval/tool-call detail, all by the
+        # same ID.
+        conn.execute("ALTER TABLE pipeline_runs ADD COLUMN correlation_id TEXT")
 
 
 # ---------------------------------------------------------------------------
@@ -227,12 +238,17 @@ class PipelineRunLogger:
         return conn
 
     def __enter__(self):
+        # Captured here (not passed in) so every caller gets this for
+        # free -- it's whatever correlation ID / trace ID is active on
+        # the contextvar for the request this pipeline run belongs to.
+        correlation_id = get_correlation_id()
         conn = self._connect()
         try:
             c = conn.cursor()
             c.execute(
-                "INSERT INTO pipeline_runs (session_id, original_query, started_at) VALUES (?, ?, ?)",
-                (self.session_id, self.original_query, _now())
+                "INSERT INTO pipeline_runs (session_id, original_query, started_at, correlation_id) "
+                "VALUES (?, ?, ?, ?)",
+                (self.session_id, self.original_query, _now(), correlation_id)
             )
             self.run_id = c.lastrowid
             conn.commit()
@@ -433,7 +449,7 @@ def get_run_trace(run_id: int) -> dict[str, Any] | None:
         row = conn.execute(
             """SELECT id, session_id, original_query, classification, total_iterations,
                       final_answer, reached_max_retries, started_at, finished_at, duration_ms,
-                      snapshot_text, snapshot_token_count
+                      snapshot_text, snapshot_token_count, correlation_id
                FROM pipeline_runs WHERE id = ?""",
             (run_id,),
         ).fetchone()
@@ -467,6 +483,7 @@ def get_run_trace(run_id: int) -> dict[str, Any] | None:
             "duration_ms": row[9],
             "snapshot_text": row[10],
             "snapshot_token_count": row[11],
+            "correlation_id": row[12],
             "llm_calls": [
                 {
                     "step": r[0],

@@ -1,7 +1,7 @@
 # IMPLEMENTATION_PLAN: Snapshot Context Maintenance
 
 **Feature:** Enhancement 1 — Snapshot Context Maintenance (`ENHANCEMENTS.md` L18–122)
-**Target Codebase:** FutBot `src/`
+**Target Codebase:** Pitchside `src/`
 **Methodology:** Test-Driven Development (TDD) — tests written before implementation for each unit
 
 ---

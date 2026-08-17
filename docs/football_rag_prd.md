@@ -1,4 +1,4 @@
-# FutBot — Product Requirements Document
+# Pitchside — Product Requirements Document
 
 **Version:** 1.0  
 **Status:** Architecture Finalized, Pre-Build  

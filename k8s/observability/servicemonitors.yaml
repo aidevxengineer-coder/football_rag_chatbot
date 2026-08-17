@@ -1,0 +1,181 @@
+# ServiceMonitor custom resources -- tell Prometheus Operator (installed
+# via the kube-prometheus-stack Helm chart, see k8s/observability/README.md)
+# to scrape each service's /metrics endpoint. Requires the Prometheus
+# Operator CRDs to already be installed; `kubectl apply` on this file
+# will fail with "no matches for kind ServiceMonitor" otherwise -- install
+# kube-prometheus-stack first.
+#
+# This is the cluster-native alternative to the `prometheus.io/scrape`
+# pod annotations already present on every Deployment in k8s/base/ --
+# use whichever your Prometheus setup expects (annotations need a
+# Prometheus configured with kubernetes_sd_configs + annotation
+# relabeling, which the kube-prometheus-stack default values.yaml in
+# this repo does NOT enable by default; ServiceMonitor is the more
+# standard fit alongside that chart).
+#
+# One ServiceMonitor per service so each shows up distinctly if you ever
+# want to disable scraping for just one; matchLabels reuse each
+# Service's existing `app: <name>` selector label, no new labels needed.
+
+apiVersion: v1
+kind: List
+items:
+  - apiVersion: monitoring.coreos.com/v1
+    kind: ServiceMonitor
+    metadata:
+      name: futbot-auth
+      namespace: futbot
+      labels:
+        release: prometheus # matches kube-prometheus-stack's default serviceMonitorSelector
+    spec:
+      selector:
+        matchLabels:
+          app: auth
+      endpoints:
+        - targetPort: 8081
+          path: /metrics
+          interval: 15s
+
+  - apiVersion: monitoring.coreos.com/v1
+    kind: ServiceMonitor
+    metadata:
+      name: futbot-gateway
+      namespace: futbot
+      labels:
+        release: prometheus
+    spec:
+      selector:
+        matchLabels:
+          app: gateway
+      endpoints:
+        - targetPort: 8000
+          path: /metrics
+          interval: 15s
+
+  - apiVersion: monitoring.coreos.com/v1
+    kind: ServiceMonitor
+    metadata:
+      name: futbot-chat
+      namespace: futbot
+      labels:
+        release: prometheus
+    spec:
+      selector:
+        matchLabels:
+          app: chat
+      endpoints:
+        - targetPort: 8082
+          path: /metrics
+          interval: 15s
+
+  - apiVersion: monitoring.coreos.com/v1
+    kind: ServiceMonitor
+    metadata:
+      name: futbot-project
+      namespace: futbot
+      labels:
+        release: prometheus
+    spec:
+      selector:
+        matchLabels:
+          app: project
+      endpoints:
+        - targetPort: 8083
+          path: /metrics
+          interval: 15s
+
+  - apiVersion: monitoring.coreos.com/v1
+    kind: ServiceMonitor
+    metadata:
+      name: futbot-rag-orchestrator
+      namespace: futbot
+      labels:
+        release: prometheus
+    spec:
+      selector:
+        matchLabels:
+          app: rag-orchestrator
+      endpoints:
+        - targetPort: 8084
+          path: /metrics
+          interval: 15s
+
+  - apiVersion: monitoring.coreos.com/v1
+    kind: ServiceMonitor
+    metadata:
+      name: futbot-retrieval
+      namespace: futbot
+      labels:
+        release: prometheus
+    spec:
+      selector:
+        matchLabels:
+          app: retrieval
+      endpoints:
+        - targetPort: 8085
+          path: /metrics
+          interval: 15s
+
+  - apiVersion: monitoring.coreos.com/v1
+    kind: ServiceMonitor
+    metadata:
+      name: futbot-ingestion
+      namespace: futbot
+      labels:
+        release: prometheus
+    spec:
+      selector:
+        matchLabels:
+          app: ingestion
+      endpoints:
+        - targetPort: 8086
+          path: /metrics
+          interval: 15s
+
+  - apiVersion: monitoring.coreos.com/v1
+    kind: ServiceMonitor
+    metadata:
+      name: futbot-llm-gateway
+      namespace: futbot
+      labels:
+        release: prometheus
+    spec:
+      selector:
+        matchLabels:
+          app: llm-gateway
+      endpoints:
+        - targetPort: 8087
+          path: /metrics
+          interval: 15s
+
+  - apiVersion: monitoring.coreos.com/v1
+    kind: ServiceMonitor
+    metadata:
+      name: futbot-tools
+      namespace: futbot
+      labels:
+        release: prometheus
+    spec:
+      selector:
+        matchLabels:
+          app: tools
+      endpoints:
+        - targetPort: 8088
+          path: /metrics
+          interval: 15s
+
+  - apiVersion: monitoring.coreos.com/v1
+    kind: ServiceMonitor
+    metadata:
+      name: futbot-observability
+      namespace: futbot
+      labels:
+        release: prometheus
+    spec:
+      selector:
+        matchLabels:
+          app: observability
+      endpoints:
+        - targetPort: 8090
+          path: /metrics
+          interval: 15s

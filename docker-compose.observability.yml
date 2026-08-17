@@ -1,0 +1,133 @@
+# Prometheus + Grafana + OpenTelemetry Collector + Jaeger + Loki/Promtail
+# overlay for local dev -- all three observability pillars.
+#
+# Usage (on top of the main service stack):
+#   docker compose -f docker-compose.yml -f docker-compose.services.yml -f docker-compose.observability.yml up -d --build
+#
+# Prometheus:  http://localhost:9090  (scrapes every service's /metrics)
+# Grafana:     http://localhost:3001  (login: admin / admin, change on first login)
+#   - "FutBot" folder has two pre-provisioned dashboards:
+#     Service Overview, RAG Pipeline
+#   - Explore tab -> Loki datasource: search/filter logs across every
+#     service without running `docker compose logs` per-container
+# Jaeger:      http://localhost:16686 (distributed trace search/waterfall view)
+#
+# Note: Grafana itself already runs on 3000 in some setups (frontend dev
+# server) -- this maps Grafana to 3001 to avoid clashing; adjust if your
+# local port 3000 is free.
+#
+# Promtail needs the host's Docker socket to discover containers and
+# read their stdout -- that's the only reason it runs with a socket
+# mount here; it only reads, never controls, other containers.
+#
+# The per-service `environment: OTEL_EXPORTER_OTLP_ENDPOINT` blocks below
+# don't redefine each service -- Compose merges them into the service
+# definitions from docker-compose.services.yml, adding just this one env
+# var. Without this overlay (i.e. running docker-compose.services.yml
+# alone), futbot_common.tracing_config falls back to its own default of
+# the same URL, so services still start fine either way -- spans just
+# fail to export silently in the background if no collector is up.
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.62
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686" # Jaeger UI
+    # 4317/4318 (OTLP) are intentionally not published to the host --
+    # the otel-collector talks to Jaeger over the internal compose
+    # network; only the UI needs a host port.
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.112.0
+    command: ["--config=/etc/otel-collector-config.yml"]
+    volumes:
+      - ./observability/otel-collector/otel-collector-config.yml:/etc/otel-collector-config.yml:ro
+    ports:
+      - "4317:4317" # OTLP gRPC (services -> collector)
+      - "4318:4318" # OTLP HTTP
+    depends_on:
+      - jaeger
+
+  loki:
+    image: grafana/loki:3.2.1
+    command: ["-config.file=/etc/loki/loki-config.yml"]
+    volumes:
+      - ./observability/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki_data:/loki
+    ports:
+      - "3100:3100"
+
+  promtail:
+    image: grafana/promtail:3.2.1
+    command: ["-config.file=/etc/promtail/promtail-config.yml"]
+    volumes:
+      - ./observability/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    depends_on:
+      - loki
+
+  auth:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+  gateway:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+  chat:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+  project:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+  rag-orchestrator:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+  retrieval:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+  ingestion:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+  llm-gateway:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+  tools:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+  observability:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  loki_data:

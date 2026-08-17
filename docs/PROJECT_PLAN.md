@@ -1,6 +1,6 @@
-# FutBot — Project Plan
+# Pitchside — Project Plan
 
-This document breaks down the development of the FutBot into distinct, independently testable phases following **Test-Driven Development (TDD)** principles. 
+This document breaks down the development of Pitchside into distinct, independently testable phases following **Test-Driven Development (TDD)** principles. 
 
 For each feature, the development loop will be:
 1. **Red**: Write a failing test for the expected behavior.

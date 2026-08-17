@@ -1,10 +1,10 @@
-# FutBot Architecture
+# Pitchside Architecture
 
-This document details the end-to-end architecture and key design decisions behind the FutBot RAG (Retrieval-Augmented Generation) pipeline.
+This document details the end-to-end architecture and key design decisions behind the Pitchside RAG (Retrieval-Augmented Generation) pipeline.
 
 ## System Overview
 
-FutBot is an intelligent, football-focused conversational agent. It utilizes a LangGraph-orchestrated workflow to intelligently parse user queries, retrieve relevant context from a local knowledge base using hybrid search, and generate factually verified responses via a suite of specialized LLMs.
+Pitchside is an intelligent, football-focused conversational agent. It utilizes a LangGraph-orchestrated workflow to intelligently parse user queries, retrieve relevant context from a local knowledge base using hybrid search, and generate factually verified responses via a suite of specialized LLMs.
 
 ---
 
@@ -60,9 +60,12 @@ Because LangGraph executes nodes in separate threads, the `PipelineRunLogger` re
 
 ## 4. API & Frontend
 
-- **Backend (FastAPI)**: Exposes endpoints for `/api/chat`, `/api/ingest`, and `/api/session/{session_id}`.
-- **State Management**: Conversations are stored in-memory in a session dictionary. The `QueryRewriter` pulls recent messages from this state to construct its context window.
-- **Frontend**: A lightweight, responsive Vanilla JS/HTML interface providing a clean user experience without the overhead of heavy frameworks.
+- **Gateway (FastAPI)**: API-only entry point with fixed routes to auth, chat,
+  project/knowledge, tools, observability, and pipeline services.
+- **Frontend (Next.js)**: `services/web` provides the Pitchside App Router UI.
+  Browser HTTP calls use same-origin `/api`; pipeline updates use WebSockets.
+- **State**: Chats and account/project metadata persist in Postgres; pipeline
+  traces use the shared observability store, and retrieval uses Qdrant + BM25.
 
 ---
 

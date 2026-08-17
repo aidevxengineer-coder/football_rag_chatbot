@@ -1,0 +1,17 @@
+apiVersion: 1
+
+datasources:
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: true
+    jsonData:
+      # Turns a `correlation_id` value in a log line into a clickable
+      # "View Trace" link that opens the matching trace in the Jaeger
+      # datasource below -- no `url` needed since the target is another
+      # tracing datasource, not an arbitrary external link.
+      derivedFields:
+        - datasourceUid: jaeger
+          matcherRegex: '"correlation_id":"([0-9a-f]{32})"'
+          name: TraceID

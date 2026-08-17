@@ -25,6 +25,10 @@ spec:
     metadata:
       labels:
         app: llm-gateway
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8087"
+        prometheus.io/path: "/metrics"
     spec:
       containers:
         - name: llm-gateway
@@ -35,12 +39,22 @@ spec:
           envFrom:
             - secretRef:
                 name: llm-gateway-secret
+          env:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector:4317"
           readinessProbe:
             httpGet:
               path: /health
               port: 8087
             initialDelaySeconds: 5
             periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8087
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            failureThreshold: 3
 
 ---
 apiVersion: v1

@@ -22,6 +22,15 @@ class Settings:
         self.refresh_token_days = int(os.getenv("REFRESH_TOKEN_DAYS", "7"))
         self.setup_token_minutes = int(os.getenv("SETUP_TOKEN_MINUTES", "30"))
         self.step_up_token_minutes = int(os.getenv("STEP_UP_TOKEN_MINUTES", "5"))
+        self.verification_code_minutes = int(os.getenv("VERIFICATION_CODE_MINUTES", "15"))
+        self.web_app_url = os.getenv("WEB_APP_URL", "http://localhost:3000")
+        self.smtp_host = os.getenv("SMTP_HOST", "").strip()
+        self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
+        self.smtp_user = os.getenv("SMTP_USER", "").strip()
+        self.smtp_password = os.getenv("SMTP_PASSWORD", "").strip().strip('"').strip("'")
+        self.smtp_from = os.getenv("SMTP_FROM", os.getenv("SMTP_USER", "noreply@pitchside.local"))
+        self.smtp_use_tls = os.getenv("SMTP_USE_TLS", "true").lower() in ("1", "true", "yes")
+        self.smtp_use_ssl = os.getenv("SMTP_USE_SSL", "false").lower() in ("1", "true", "yes")
 
     def access_delta(self) -> timedelta:
         return timedelta(minutes=self.access_token_minutes)

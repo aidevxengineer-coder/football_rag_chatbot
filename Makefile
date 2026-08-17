@@ -1,26 +1,29 @@
 # FutBot development Makefile
 #
-# The FastAPI backend also serves the frontend at /. Run only ONE of
-# `make backend` or `make frontend` at a time (both bind to PORT).
-#
 #   make install   - install deps + bootstrap prerequisites
-#   make backend   - run server, hot-reload on src/
-#   make frontend  - run server, hot-reload on frontend/
+#   make backend   - run API gateway on :8000
+#   make frontend  - run Pitchside Next.js on :3000
 
 PYTHON ?= python
-PORT   ?= 8000
+NPM    ?= npm
+API_PORT ?= 8000
+WEB_PORT ?= 3000
 
 export PYTHONPATH := .
 
-.PHONY: help install backend frontend
+.PHONY: help install backend frontend seed-kb
+
+RETRIEVAL_URL ?= http://localhost:8085
+GLOBAL_KB_CSV ?= final-articles.csv
 
 help:
 	@echo "FutBot Makefile targets:"
 	@echo "  make install   Install Python dependencies and bootstrap prerequisites"
-	@echo "  make backend   Run API + UI at http://localhost:$(PORT) (reload src/)"
-	@echo "  make frontend  Run API + UI at http://localhost:$(PORT) (reload frontend/)"
+	@echo "  make backend   Run API gateway at http://localhost:$(API_PORT)"
+	@echo "  make frontend  Run Pitchside web at http://localhost:$(WEB_PORT)"
+	@echo "  make seed-kb   Index final-articles.csv into global knowledge base"
 	@echo ""
-	@echo "Variables: PYTHON=$(PYTHON)  PORT=$(PORT)"
+	@echo "Variables: PYTHON=$(PYTHON) NPM=$(NPM) API_PORT=$(API_PORT) WEB_PORT=$(WEB_PORT)"
 
 install:
 	$(PYTHON) -m pip install --upgrade pip
@@ -31,11 +34,14 @@ install:
 	@echo "Optional: install Tesseract OCR for image text extraction (e.g. choco install tesseract on Windows)"
 
 backend: install-check
-	$(PYTHON) -m uvicorn src.api:app --host 0.0.0.0 --port $(PORT) --reload --reload-dir src
+	$(PYTHON) -m uvicorn services.gateway.main:app --host 0.0.0.0 --port $(API_PORT) --reload --reload-dir services/gateway
 
-frontend: install-check
-	$(PYTHON) -m uvicorn src.api:app --host 0.0.0.0 --port $(PORT) --reload --reload-dir frontend
+frontend:
+	$(NPM) --prefix services/web run dev -- --port $(WEB_PORT)
 
 # Lightweight guard so backend/frontend fail fast with a helpful message
 install-check:
 	@$(PYTHON) -c "import uvicorn" || (echo "Dependencies missing. Run: make install" && exit 1)
+
+seed-kb: install-check
+	RETRIEVAL_SERVICE_URL=$(RETRIEVAL_URL) $(PYTHON) scripts/seed_global_kb.py --csv $(GLOBAL_KB_CSV)

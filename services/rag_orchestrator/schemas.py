@@ -13,6 +13,7 @@ class PipelineRunRequest(BaseModel):
     snapshot: str = ""
     snapshot_turn_count: int = 0
     project_id: str | None = None
+    user_id: str | None = None
     web_search_enabled: bool = False
 
 

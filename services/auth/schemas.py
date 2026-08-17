@@ -12,6 +12,10 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class VerifyEmailRequest(BaseModel):
+    code: str = Field(min_length=6, max_length=8)
+
+
 class Verify2FARequest(BaseModel):
     code: str = Field(min_length=6, max_length=8)
 
@@ -25,7 +29,10 @@ class RegisterResponse(BaseModel):
     email: str
     first_name: str
     status: str
-    setup_token: str
+    verification_token: str
+    verification_email_sent: bool = False
+    dev_verification_code: str | None = None
+    verification_email_error: str | None = None
 
 
 class LoginResponse(BaseModel):
@@ -55,3 +62,7 @@ class UserResponse(BaseModel):
     first_name: str
     status: str
     totp_enabled: bool
+
+
+class OAuthProvidersResponse(BaseModel):
+    google: bool

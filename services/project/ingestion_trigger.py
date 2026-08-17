@@ -14,6 +14,7 @@ def enqueue_ingestion(
     filename: str,
     storage_key: str,
     content_hash: str = "",
+    scope: str = "project",
 ) -> None:
     url = f"{settings.ingestion_service_url.rstrip('/')}/ingest/jobs"
     try:
@@ -25,6 +26,7 @@ def enqueue_ingestion(
                 "filename": filename,
                 "storage_key": storage_key,
                 "content_hash": content_hash,
+                "scope": scope,
             },
             timeout=10.0,
         )

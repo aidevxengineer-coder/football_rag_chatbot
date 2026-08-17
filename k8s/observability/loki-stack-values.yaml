@@ -1,0 +1,41 @@
+# Helm values for Grafana's `loki-stack` chart (Loki + Promtail), the k8s
+# equivalent of the loki/promtail containers in
+# docker-compose.observability.yml. Promtail here runs as a DaemonSet
+# (one per node) reading each node's container log files directly --
+# no Docker-socket mount needed in k8s, unlike the compose setup.
+#
+# Install:
+#   helm repo add grafana https://grafana.github.io/helm-charts
+#   helm repo update
+#   helm install loki grafana/loki-stack \
+#     -n futbot --create-namespace \
+#     -f k8s/observability/loki-stack-values.yaml
+#
+# Grafana's Loki datasource (see prometheus-stack-values.yaml
+# grafana.additionalDataSources) points at
+# http://loki-gateway.futbot.svc.cluster.local -- the chart below creates
+# that gateway Service name by default when `loki.name: loki`.
+
+loki:
+  isDefault: false
+  persistence:
+    enabled: true
+    size: 10Gi
+
+promtail:
+  enabled: true
+  config:
+    snippets:
+      # Every FutBot service already logs structured JSON (see
+      # futbot_common.logging_config) -- promote `service`/`level` to
+      # indexed Loki labels the same way the docker-compose Promtail
+      # config does. `correlation_id` is deliberately NOT a label (see
+      # observability/promtail/promtail-config.yml for why).
+      pipelineStages:
+        - json:
+            expressions:
+              level: level
+              service: service
+        - labels:
+            level:
+            service:

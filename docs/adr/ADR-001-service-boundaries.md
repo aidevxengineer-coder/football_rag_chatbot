@@ -6,7 +6,7 @@
 
 ## Decision
 
-FutBot will be decomposed into bounded-context microservices behind an API Gateway, communicating via sync REST for request/response paths and async events (Redis) for ingestion and observability fan-out.
+Pitchside (formerly FutBot) will be decomposed into bounded-context microservices behind an API Gateway, communicating via sync REST for request/response paths and async events (Redis) for ingestion and observability fan-out.
 
 ## Service boundaries
 

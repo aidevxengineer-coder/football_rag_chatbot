@@ -29,6 +29,10 @@ spec:
     metadata:
       labels:
         app: project
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8083"
+        prometheus.io/path: "/metrics"
     spec:
       containers:
         - name: project
@@ -39,12 +43,22 @@ spec:
           envFrom:
             - secretRef:
                 name: project-secret
+          env:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector:4317"
           readinessProbe:
             httpGet:
               path: /health
               port: 8083
             initialDelaySeconds: 5
             periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8083
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            failureThreshold: 3
 
 ---
 apiVersion: v1

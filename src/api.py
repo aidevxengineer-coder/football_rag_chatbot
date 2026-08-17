@@ -1,7 +1,4 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-import os
 
 from futbot_common import CorrelationIdMiddleware
 
@@ -36,13 +33,10 @@ def chat():
     )
 
 
-FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
-
-
 @app.get("/")
-def serve_frontend():
-    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
-
-
-if os.path.isdir(FRONTEND_DIR):
-    app.mount("/static", StaticFiles(directory=os.path.join(FRONTEND_DIR, "static")), name="static")
+def root():
+    return {
+        "service": "legacy-api",
+        "status": "deprecated",
+        "message": "Use the gateway API and Pitchside web service.",
+    }

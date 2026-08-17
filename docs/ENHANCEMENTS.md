@@ -1,6 +1,6 @@
-# FutBot Enhancements
+# Pitchside Enhancements
 
-This document details the architecture, design decisions, and implementation specifications for five planned enhancements to the FutBot RAG pipeline. Each section is self-contained and cross-references the relevant components in `ARCHITECTURE.md` where applicable.
+This document details the architecture, design decisions, and implementation specifications for five planned enhancements to the Pitchside RAG pipeline. Each section is self-contained and cross-references the relevant components in `ARCHITECTURE.md` where applicable.
 
 ---
 
@@ -534,7 +534,7 @@ This metadata serves two purposes: debugging retrieval failures (which source do
 
 ### BM25 Index Updates
 
-When new files are ingested, the BM25 index must be rebuilt or incrementally updated to include the new chunks. The current architecture serialises BM25Okapi at startup from the full chunk corpus. On ingestion, the new chunks are appended to the corpus and BM25Okapi is re-instantiated. For the current scale of FutBot's knowledge base, full re-instantiation on ingestion is acceptable. If the corpus grows large enough that re-instantiation becomes slow, a persistent BM25 index library (e.g., `bm25s`) should be adopted.
+When new files are ingested, the BM25 index must be rebuilt or incrementally updated to include the new chunks. The current architecture serialises BM25Okapi at startup from the full chunk corpus. On ingestion, the new chunks are appended to the corpus and BM25Okapi is re-instantiated. For the current scale of Pitchside's knowledge base, full re-instantiation on ingestion is acceptable. If the corpus grows large enough that re-instantiation becomes slow, a persistent BM25 index library (e.g., `bm25s`) should be adopted.
 
 ### Environment Variables
 
@@ -832,4 +832,4 @@ ALTER TABLE loop_iterations ADD COLUMN streaming_tokens_before_retry INTEGER;
 ---
 
 *Document version: 1.0 — Finalised June 2026*
-*Covers enhancements to FutBot as described in ARCHITECTURE.md v1.0*
+*Covers enhancements to Pitchside as described in ARCHITECTURE.md v1.0*

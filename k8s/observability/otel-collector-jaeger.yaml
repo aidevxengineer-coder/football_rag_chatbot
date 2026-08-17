@@ -1,0 +1,159 @@
+# OpenTelemetry Collector + Jaeger (all-in-one) for the futbot namespace.
+#
+# These are plain Deployments/Services -- no operator required -- mirroring
+# the docker-compose.observability.yml setup so behavior matches between
+# local dev and the cluster. Every service's OTEL_EXPORTER_OTLP_ENDPOINT
+# (see each service's deployment.yaml) already points at
+# "http://otel-collector:4317", which resolves to the Service below via
+# in-namespace DNS.
+#
+# Apply with:
+#   kubectl apply -f k8s/observability/otel-collector-jaeger.yaml
+#
+# For production scale, replace the Jaeger all-in-one (in-memory storage,
+# data lost on restart) with the Jaeger Operator backed by Elasticsearch
+# or Cassandra -- all-in-one is intentionally the "local/small cluster"
+# choice here, matching the docker-compose setup.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: futbot
+data:
+  otel-collector-config.yml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+
+    processors:
+      batch: {}
+
+    exporters:
+      otlp/jaeger:
+        endpoint: jaeger:4317
+        tls:
+          insecure: true
+
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [otlp/jaeger]
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: futbot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+    spec:
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector-contrib:0.112.0
+          args: ["--config=/etc/otel-collector-config.yml"]
+          ports:
+            - containerPort: 4317
+            - containerPort: 4318
+          volumeMounts:
+            - name: config
+              mountPath: /etc/otel-collector-config.yml
+              subPath: otel-collector-config.yml
+      volumes:
+        - name: config
+          configMap:
+            name: otel-collector-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: futbot
+spec:
+  selector:
+    app: otel-collector
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaeger
+  namespace: futbot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jaeger
+  template:
+    metadata:
+      labels:
+        app: jaeger
+    spec:
+      containers:
+        - name: jaeger
+          image: jaegertracing/all-in-one:1.62
+          env:
+            - name: COLLECTOR_OTLP_ENABLED
+              value: "true"
+          ports:
+            - containerPort: 16686 # UI + query API
+            - containerPort: 4317 # OTLP gRPC (from otel-collector)
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger
+  namespace: futbot
+spec:
+  selector:
+    app: jaeger
+  ports:
+    - name: ui
+      port: 16686
+      targetPort: 16686
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jaeger-ui
+  namespace: futbot
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: jaeger.futbot.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: jaeger
+                port:
+                  number: 16686

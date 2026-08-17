@@ -1,0 +1,12 @@
+apiVersion: 1
+
+datasources:
+  - name: Jaeger
+    uid: jaeger
+    type: jaeger
+    access: proxy
+    # Jaeger's query service serves both its UI and its HTTP query API
+    # on the same port -- Grafana's Jaeger datasource plugin talks to
+    # the same :16686 you'd open in a browser for manual trace search.
+    url: http://jaeger:16686
+    editable: true

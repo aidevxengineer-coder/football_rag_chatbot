@@ -1,13 +1,19 @@
 from fastapi import APIRouter, HTTPException
 
 from futbot_common.responses import DataResponse
+from services.tools.live_events import fetch_live_events
 from services.tools.registry import (
     WEB_SEARCH_TOOL,
     execute_tool,
     list_tools,
     mcp_tools_available,
 )
-from services.tools.schemas import ExecuteToolRequest, ExecuteToolResponse, ToolDefinition
+from services.tools.schemas import (
+    ExecuteToolRequest,
+    ExecuteToolResponse,
+    LiveEventsResponse,
+    ToolDefinition,
+)
 
 router = APIRouter(tags=["tools"])
 
@@ -25,6 +31,12 @@ def tools_health() -> DataResponse[dict]:
             "mcp_available": mcp_tools_available(),
         }
     )
+
+
+@router.get("/tools/live-events", response_model=DataResponse[LiveEventsResponse])
+def live_events() -> DataResponse[LiveEventsResponse]:
+    """Safe public facade over the allowlisted live-score MCP tools."""
+    return DataResponse(data=fetch_live_events())
 
 
 @router.post("/tools/execute", response_model=DataResponse[ExecuteToolResponse])

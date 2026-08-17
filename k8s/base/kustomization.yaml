@@ -26,4 +26,7 @@ resources:
   - tools/deployment.yaml
   - retrieval/deployment.yaml
   - ingestion/deployment.yaml
+  - rag-orchestrator/deployment.yaml
+  - observability/deployment.yaml
   - gateway/deployment.yaml
+  - web/deployment.yaml

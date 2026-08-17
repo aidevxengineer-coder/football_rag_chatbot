@@ -8,7 +8,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY services/ingestion services/ingestion
 COPY services/retrieval/indexer.py services/retrieval/indexer.py
+COPY services/retrieval/schemas.py services/retrieval/schemas.py
 COPY services/retrieval/__init__.py services/retrieval/__init__.py
+COPY scripts/seed_global_kb.py scripts/seed_global_kb.py
 COPY services/llm_gateway services/llm_gateway
 COPY services/__init__.py services/__init__.py
 

@@ -2,20 +2,28 @@ import os
 import re
 from pathlib import Path
 
-_PROMPTS_FILE = Path(__file__).resolve().parent / "prompts.txt"
+_PROMPTS_FILE = Path(
+    os.getenv("PROMPTS_FILE", str(Path(__file__).resolve().parent / "prompts.txt"))
+)
 _prompts_cache: dict[str, str] = {}
+_prompts_mtime: float | None = None
 
 
 def load_prompts() -> dict[str, str]:
-    global _prompts_cache
-    if _prompts_cache:
-        return _prompts_cache
+    global _prompts_cache, _prompts_mtime
     if not _PROMPTS_FILE.is_file():
         raise FileNotFoundError(f"Prompts file not found at {_PROMPTS_FILE}")
+    mtime = _PROMPTS_FILE.stat().st_mtime
+    if _prompts_cache and _prompts_mtime == mtime:
+        return _prompts_cache
+
     content = _PROMPTS_FILE.read_text(encoding="utf-8")
     blocks = re.split(r"^\[([A-Z_]+)\]\s*$", content, flags=re.MULTILINE)
+    parsed: dict[str, str] = {}
     for i in range(1, len(blocks), 2):
-        _prompts_cache[blocks[i]] = blocks[i + 1].strip()
+        parsed[blocks[i]] = blocks[i + 1].strip()
+    _prompts_cache = parsed
+    _prompts_mtime = mtime
     return _prompts_cache
 
 
@@ -38,5 +46,6 @@ def get_prompt_parts(name: str) -> tuple[str, str]:
 
 
 def clear_prompts_cache_for_tests() -> None:
-    global _prompts_cache
+    global _prompts_cache, _prompts_mtime
     _prompts_cache = {}
+    _prompts_mtime = None

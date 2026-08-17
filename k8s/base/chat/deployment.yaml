@@ -8,6 +8,8 @@ stringData:
   DATABASE_URL: postgresql+asyncpg://futbot:futbot@postgres:5432/futbot
   PROJECT_SERVICE_URL: http://project:8083
   LLM_GATEWAY_URL: http://llm-gateway:8087
+  ORCHESTRATOR_SERVICE_URL: http://rag-orchestrator:8084
+  TOOLS_SERVICE_URL: http://tools:8088
   CONTEXT_BUDGET_TOKENS: "8192"
   AUTO_COMPRESS_THRESHOLD_PCT: "85"
 
@@ -26,6 +28,10 @@ spec:
     metadata:
       labels:
         app: chat
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8082"
+        prometheus.io/path: "/metrics"
     spec:
       containers:
         - name: chat
@@ -36,12 +42,22 @@ spec:
           envFrom:
             - secretRef:
                 name: chat-secret
+          env:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector:4317"
           readinessProbe:
             httpGet:
               path: /health
               port: 8082
             initialDelaySeconds: 5
             periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8082
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            failureThreshold: 3
 
 ---
 apiVersion: v1

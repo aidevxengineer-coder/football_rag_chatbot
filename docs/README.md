@@ -1,6 +1,6 @@
-# FutBot ⚽
+# Pitchside ⚽
 
-FutBot is an advanced AI Football Analyst powered by a multi-LLM Retrieval-Augmented Generation (RAG) pipeline. It analyzes the latest football news from major sources to provide accurate, up-to-date answers about the football world, significantly reducing hallucinations.
+Pitchside is an advanced AI Football Analyst powered by a multi-LLM Retrieval-Augmented Generation (RAG) pipeline. It analyzes the latest football news from major sources to provide accurate, up-to-date answers about the football world, significantly reducing hallucinations.
 
 ## Features
 - **Live News Retrieval**: Syncs the latest football news for up-to-date insights.
@@ -18,26 +18,30 @@ FutBot is an advanced AI Football Analyst powered by a multi-LLM Retrieval-Augme
 ### Installation & Execution
 1. Clone the repository:
    ```bash
-   git clone https://github.com/SabihAli/FutBot.git
-   cd FutBot
+   git clone https://github.com/SabihAli/Pitchside.git
+   cd Pitchside
    ```
 
 2. Setup environment variables:
-   Create a `.env` file based on your required API keys (OpenAI, etc.).
+   ```bash
+   cp .env.example .env
+   ```
+   Add the provider keys you use.
 
 3. Run with Docker Compose:
    ```bash
-   docker-compose up --build
+   docker compose up --build
    ```
 
 4. Access the App:
-   - Frontend: `http://localhost:8000` (or as configured)
+   - Pitchside web: `http://localhost:3000`
+   - API gateway: `http://localhost:8000`
    - API Docs: `http://localhost:8000/docs`
 
 ## Architecture
-- **Frontend**: Vanilla HTML/JS/CSS with a responsive sidebar and chat interface.
-- **Backend (src)**: FastAPI server handling the orchestration and generation.
-- **Vector Store**: ChromaDB / BM25 for retrieval.
+- **Frontend**: Next.js App Router service in `services/web`.
+- **Backend**: FastAPI microservices behind the API gateway.
+- **Retrieval**: Qdrant dense search plus BM25 sparse retrieval.
 
 ## Development
 See `PROJECT_PLAN.md`, `football_rag_prd.md`, and [`UI_REQUIREMENTS.md`](UI_REQUIREMENTS.md) (living UI spec for Phase 8) for detailed development guidelines and architecture.

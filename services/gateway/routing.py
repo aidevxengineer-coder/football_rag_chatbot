@@ -1,6 +1,3 @@
-import os
-from pathlib import Path
-
 from services.gateway.config import settings
 
 
@@ -9,6 +6,7 @@ SERVICE_ROUTES: dict[str, str] = {
     "/auth": settings.auth_service_url,
     "/chats": settings.chat_service_url,
     "/projects": settings.project_service_url,
+    "/knowledge": settings.project_service_url,
     "/llm": settings.llm_service_url,
     "/retrieve": settings.retrieval_service_url,
     "/ingest": settings.ingestion_service_url,
@@ -17,7 +15,7 @@ SERVICE_ROUTES: dict[str, str] = {
     "/tools": settings.tools_service_url,
 }
 
-ACTIVE_PREFIXES = ("/auth", "/chats", "/projects", "/traces", "/tools")
+ACTIVE_PREFIXES = ("/auth", "/chats", "/projects", "/knowledge", "/traces", "/tools")
 
 NOT_IMPLEMENTED_PREFIXES = (
     "/llm",
@@ -26,6 +24,3 @@ NOT_IMPLEMENTED_PREFIXES = (
     "/pipeline",
     "/tools/execute",
 )
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
-FRONTEND_DIR = REPO_ROOT / "frontend"

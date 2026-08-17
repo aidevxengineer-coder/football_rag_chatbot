@@ -98,3 +98,61 @@ async def test_other_user_cannot_access_private_chat(chat_client):
         f"/chats/{chat_id}", headers={"X-User-ID": "intruder"}
     )
     assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_merge_anon_chat(chat_client):
+    create = await chat_client.post("/chats", json={"title": "Anon merge"})
+    chat_id = create.json()["data"]["id"]
+    assert create.json()["data"]["user_id"] is None
+
+    # Logged-in user cannot read anon chat until merge
+    blocked = await chat_client.get(
+        f"/chats/{chat_id}", headers={"X-User-ID": "user-merge"}
+    )
+    assert blocked.status_code == 403
+
+    merged = await chat_client.post(
+        "/chats/merge",
+        json={"chat_id": chat_id},
+        headers={"X-User-ID": "user-merge"},
+    )
+    assert merged.status_code == 200
+    assert merged.json()["data"]["user_id"] == "user-merge"
+
+    # Idempotent
+    again = await chat_client.post(
+        "/chats/merge",
+        json={"chat_id": chat_id},
+        headers={"X-User-ID": "user-merge"},
+    )
+    assert again.status_code == 200
+    assert again.json()["data"]["user_id"] == "user-merge"
+
+    ok = await chat_client.get(
+        f"/chats/{chat_id}", headers={"X-User-ID": "user-merge"}
+    )
+    assert ok.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_merge_requires_auth(chat_client):
+    create = await chat_client.post("/chats", json={"title": "Anon"})
+    chat_id = create.json()["data"]["id"]
+    response = await chat_client.post("/chats/merge", json={"chat_id": chat_id})
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "LOGIN_REQUIRED"
+
+
+@pytest.mark.asyncio
+async def test_merge_rejects_other_users_chat(chat_client):
+    create = await chat_client.post(
+        "/chats", json={"title": "Owned"}, headers={"X-User-ID": "owner"}
+    )
+    chat_id = create.json()["data"]["id"]
+    response = await chat_client.post(
+        "/chats/merge",
+        json={"chat_id": chat_id},
+        headers={"X-User-ID": "intruder"},
+    )
+    assert response.status_code == 403

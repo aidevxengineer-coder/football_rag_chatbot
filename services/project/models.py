@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -57,3 +57,23 @@ class ProjectMemory(Base):
     )
 
     project: Mapped[Project] = relationship(back_populates="memory")
+
+
+class UserKnowledgeFile(Base):
+    """Account-scoped Ball Knowledge uploads (not league/project files)."""
+
+    __tablename__ = "user_knowledge_files"
+    __table_args__ = {"schema": "project"}
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id: Mapped[str] = mapped_column(String(36), index=True)
+    filename: Mapped[str] = mapped_column(String(512))
+    content_hash: Mapped[str] = mapped_column(String(64))
+    storage_key: Mapped[str] = mapped_column(String(1024))
+    status: Mapped[str] = mapped_column(String(32), default="pending")
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    chunks_indexed: Mapped[int] = mapped_column(Integer, default=0)
+    tokens_indexed: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

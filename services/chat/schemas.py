@@ -23,6 +23,10 @@ class CreateChatRequest(BaseModel):
     title: str = "New Chat"
 
 
+class MergeChatRequest(BaseModel):
+    chat_id: str = Field(min_length=1)
+
+
 class ChatResponse(BaseModel):
     id: str
     user_id: str | None

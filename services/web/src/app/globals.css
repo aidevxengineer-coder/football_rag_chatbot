@@ -1,0 +1,199 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.material-symbols-outlined {
+  font-family: "Material Symbols Outlined";
+  font-weight: normal;
+  font-style: normal;
+  font-size: 1.25rem;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+  -webkit-font-smoothing: antialiased;
+}
+
+:root {
+  --card: #f7f7f7;
+  --ring: #1a6b3a;
+  --input: #e0e0e0;
+  --muted: #f0f0f0;
+  --accent: #d4ead9;
+  --border: #e0e0e0;
+  --radius: 0.5rem;
+  --chart-1: #1a6b3a;
+  --chart-2: #2d9456;
+  --chart-3: #6dba8a;
+  --chart-4: #a8d5b5;
+  --chart-5: #2c3e35;
+  --popover: #f8f5f0;
+  --primary: #1a6b3a;
+  --sidebar: #f7f7f7;
+  --spacing: 0.25rem;
+  --font-mono: "Source Code Pro", monospace;
+  --font-sans: Montserrat, sans-serif;
+  --secondary: #e8f2ec;
+  --background: #ffffff;
+  --font-serif: Merriweather, serif;
+  --foreground: #111111;
+  --destructive: #c0392b;
+  --sidebar-ring: #1a6b3a;
+  --letter-spacing: 0em;
+  --sidebar-accent: #d4ead9;
+  --sidebar-border: #e0e0e0;
+  --card-foreground: #111111;
+  --sidebar-primary: #1a6b3a;
+  --muted-foreground: #686868;
+  --accent-foreground: #1a4d2a;
+  --popover-foreground: #3e2723;
+  --primary-foreground: #ffffff;
+  --sidebar-foreground: #111111;
+  --secondary-foreground: #1a6b3a;
+  --destructive-foreground: #ffffff;
+  --sidebar-accent-foreground: #1a4d2a;
+  --sidebar-primary-foreground: #ffffff;
+}
+
+.dark {
+  --card: #2d3a2e;
+  --ring: #4caf50;
+  --input: #3e4a3d;
+  --muted: #252f26;
+  --accent: #388e3c;
+  --border: #3e4a3d;
+  --radius: 0.5rem;
+  --chart-1: #81c784;
+  --chart-2: #66bb6a;
+  --chart-3: #4caf50;
+  --chart-4: #43a047;
+  --chart-5: #388e3c;
+  --popover: #2d3a2e;
+  --primary: #4caf50;
+  --sidebar: #1c2a1f;
+  --spacing: 0.25rem;
+  --font-mono: "Source Code Pro", monospace;
+  --font-sans: Montserrat, sans-serif;
+  --secondary: #3e4a3d;
+  --background: #1c2a1f;
+  --font-serif: Merriweather, serif;
+  --foreground: #f0ebe5;
+  --destructive: #c62828;
+  --sidebar-ring: #4caf50;
+  --letter-spacing: 0em;
+  --sidebar-accent: #388e3c;
+  --sidebar-border: #3e4a3d;
+  --card-foreground: #f0ebe5;
+  --sidebar-primary: #4caf50;
+  --muted-foreground: #d7cfc4;
+  --accent-foreground: #f0ebe5;
+  --popover-foreground: #f0ebe5;
+  --primary-foreground: #0a1f0c;
+  --sidebar-foreground: #f0ebe5;
+  --secondary-foreground: #d7e0d6;
+  --destructive-foreground: #f0ebe5;
+  --sidebar-accent-foreground: #f0ebe5;
+  --sidebar-primary-foreground: #0a1f0c;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
+    letter-spacing: var(--letter-spacing);
+  }
+}
+
+.message-markdown {
+  @apply space-y-3 text-sm leading-relaxed;
+}
+
+.message-markdown p {
+  @apply whitespace-pre-wrap;
+}
+
+.message-markdown h1,
+.message-markdown h2,
+.message-markdown h3,
+.message-markdown h4 {
+  @apply font-serif font-bold text-foreground;
+}
+
+.message-markdown h1 {
+  @apply text-xl;
+}
+
+.message-markdown h2 {
+  @apply text-lg;
+}
+
+.message-markdown h3 {
+  @apply text-base;
+}
+
+.message-markdown ul,
+.message-markdown ol {
+  @apply ml-5 space-y-1;
+}
+
+.message-markdown ul {
+  @apply list-disc;
+}
+
+.message-markdown ol {
+  @apply list-decimal;
+}
+
+.message-markdown li {
+  @apply pl-1;
+}
+
+.message-markdown strong {
+  @apply font-semibold text-foreground;
+}
+
+.message-markdown em {
+  @apply italic;
+}
+
+.message-markdown code {
+  @apply rounded bg-muted px-1 py-0.5 font-mono text-[0.85em];
+}
+
+.message-markdown pre {
+  @apply overflow-x-auto rounded-lg border border-border bg-muted p-3;
+}
+
+.message-markdown pre code {
+  @apply bg-transparent p-0;
+}
+
+.message-markdown blockquote {
+  @apply border-l-2 border-primary pl-3 italic text-muted-foreground;
+}
+
+.message-markdown a {
+  @apply text-primary underline underline-offset-2;
+}
+
+.message-markdown table {
+  @apply w-full border-collapse text-left text-xs;
+}
+
+.message-markdown th,
+.message-markdown td {
+  @apply border border-border px-2 py-1;
+}

@@ -1,7 +1,7 @@
 import json
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Response
 import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,12 +19,13 @@ from services.chat.context_builder import (
 from services.chat.db import get_db
 from services.chat.deps import assert_chat_access, optional_user_id, require_user_id
 from services.chat.models import Chat, Message
-from services.chat.orchestrator_client import run_pipeline_sync
+from services.chat.pipeline_runner import run_pipeline_for_chat
 from services.chat.schemas import (
     ChatListItem,
     ChatResponse,
     CreateChatRequest,
     CreateMessageRequest,
+    MergeChatRequest,
     MessageListResponse,
     MessageResponse,
     PostMessageResponse,
@@ -100,6 +101,29 @@ async def create_chat(
     return DataResponse(data=_chat_response(chat, usage_raw))
 
 
+@router.post("/merge", response_model=DataResponse[ChatResponse])
+async def merge_chat(
+    body: MergeChatRequest,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(require_user_id),
+):
+    """Claim an anonymous chat into the authenticated user's account. Idempotent."""
+    chat = await load_chat_with_messages(db, body.chat_id)
+    if not chat:
+        raise AuthError("NOT_FOUND", "Chat not found.", 404)
+    if chat.user_id is None:
+        chat.user_id = user_id
+        chat.updated_at = datetime.now(timezone.utc)
+        await db.commit()
+        chat = await load_chat_with_messages(db, chat.id)
+        if not chat:
+            raise AuthError("NOT_FOUND", "Chat not found.", 404)
+    elif chat.user_id != user_id:
+        raise AuthError("FORBIDDEN", "You do not have access to this chat.", 403)
+    usage_raw = await build_context_usage(chat, user_id=user_id)
+    return DataResponse(data=_chat_response(chat, usage_raw))
+
+
 @router.get("/{chat_id}", response_model=DataResponse[ChatResponse])
 async def get_chat(
     chat_id: str,
@@ -157,6 +181,7 @@ async def list_messages(
 async def post_message(
     chat_id: str,
     body: CreateMessageRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     user_id: str | None = Depends(optional_user_id),
 ):
@@ -184,68 +209,30 @@ async def post_message(
     await db.commit()
     await db.refresh(msg)
 
-    assistant_msg: Message | None = None
-    run_id: int | None = None
-    pipeline_result: dict = {}
+    pipeline_async = False
     if body.role == "user":
-        ctx = _messages_to_context(chat)
-        snap = chat.snapshot.snapshot_text if chat.snapshot else ""
-        turn_count = chat.snapshot.snapshot_turn_count if chat.snapshot else 0
-        history = [
-            {"role": m.role, "content": m.content}
-            for m in sorted(chat.messages, key=lambda m: m.created_at)
-        ]
-        try:
-            pipeline_result = run_pipeline_sync(
-                session_id=chat.id,
-                query=body.content,
-                context_messages=history,
-                snapshot=snap,
-                snapshot_turn_count=turn_count,
-                project_id=chat.project_id,
-                web_search_enabled=body.web_search_enabled,
-            )
-            assistant_msg = Message(
-                chat_id=chat.id,
-                role="assistant",
-                content=pipeline_result["reply"],
-                citations_json=json.dumps(pipeline_result.get("citations", [])),
-            )
-            db.add(assistant_msg)
-            chat.messages.append(assistant_msg)
-            chat.updated_at = datetime.now(timezone.utc)
-            snap_row = await ensure_snapshot(db, chat.id)
-            snap_row.snapshot_text = pipeline_result["snapshot"]
-            snap_row.snapshot_turn_count = pipeline_result["snapshot_turn_count"]
-            run_id = pipeline_result.get("run_id")
-            await db.commit()
-            await db.refresh(assistant_msg)
-            usage_raw = await build_context_usage(chat, user_id=user_id)
-        except httpx.HTTPError:
-            pass
+        pipeline_async = True
+        background_tasks.add_task(
+            run_pipeline_for_chat,
+            chat_id=chat.id,
+            user_id=user_id,
+            query=body.content,
+            web_search_enabled=body.web_search_enabled,
+        )
 
     return DataResponse(
         data=PostMessageResponse(
             message=MessageResponse(
                 id=msg.id, role=msg.role, content=msg.content, created_at=msg.created_at
             ),
-            assistant_message=(
-                MessageResponse(
-                    id=assistant_msg.id,
-                    role=assistant_msg.role,
-                    content=assistant_msg.content,
-                    created_at=assistant_msg.created_at,
-                )
-                if assistant_msg
-                else None
-            ),
+            assistant_message=None,
             context_usage=to_context_usage_schema(usage_raw),
             should_compress=usage_raw["should_compress"],
             compression_pending=chat.compression_pending,
-            run_id=run_id,
-            tool_notice=pipeline_result.get("tool_notice") if assistant_msg else None,
-            tool_notice_code=pipeline_result.get("tool_notice_code") if assistant_msg else None,
-            web_search_skipped=bool(pipeline_result.get("web_search_skipped")) if assistant_msg else False,
+            run_id=None,
+            tool_notice=None,
+            tool_notice_code="PIPELINE_RUNNING" if pipeline_async else None,
+            web_search_skipped=False,
         )
     )
 

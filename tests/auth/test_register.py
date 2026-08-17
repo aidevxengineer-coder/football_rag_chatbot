@@ -14,7 +14,8 @@ async def test_register_requires_first_name(auth_client):
 
 
 @pytest.mark.asyncio
-async def test_register_returns_pending_2fa(auth_client):
+async def test_register_returns_pending_verification(auth_client, monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "development")
     response = await auth_client.post(
         "/auth/register",
         json={
@@ -25,6 +26,9 @@ async def test_register_returns_pending_2fa(auth_client):
     )
     assert response.status_code == 201
     body = response.json()
-    assert body["data"]["status"] == "pending_2fa"
+    assert body["data"]["status"] == "pending_verification"
     assert body["data"]["first_name"] == "Ada"
-    assert "setup_token" in body["data"]
+    assert "verification_token" in body["data"]
+    assert body["data"]["verification_email_sent"] is False
+    assert body["data"]["dev_verification_code"] is not None
+    assert len(body["data"]["dev_verification_code"]) == 6

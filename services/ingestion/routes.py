@@ -24,6 +24,7 @@ def create_job(
         filename=body.filename,
         storage_key=body.storage_key,
         content_hash=body.content_hash,
+        scope=body.scope,
     )
     run_job(job.id, background_tasks)
     return DataResponse(

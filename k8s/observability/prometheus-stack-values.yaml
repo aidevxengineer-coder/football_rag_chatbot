@@ -1,0 +1,68 @@
+# Helm values for the `kube-prometheus-stack` chart (Prometheus + Grafana
+# + Alertmanager + Prometheus Operator, incl. the ServiceMonitor CRD used
+# by k8s/observability/servicemonitors.yaml and the PrometheusRule CRD
+# used by k8s/observability/prometheus-rules.yaml).
+#
+# Install:
+#   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+#   helm repo update
+#   helm install prometheus prometheus-community/kube-prometheus-stack \
+#     -n futbot --create-namespace \
+#     -f k8s/observability/prometheus-stack-values.yaml
+#
+# Then:
+#   kubectl apply -f k8s/observability/servicemonitors.yaml
+#   kubectl apply -f k8s/observability/prometheus-rules.yaml
+#
+# Grafana:     kubectl port-forward -n futbot svc/prometheus-grafana 3000:80
+#              (login: admin / <see grafana.adminPassword below>)
+# Prometheus:  kubectl port-forward -n futbot svc/prometheus-kube-prometheus-prometheus 9090:9090
+
+prometheus:
+  prometheusSpec:
+    # Only pick up ServiceMonitors/PrometheusRules carrying this label --
+    # matches k8s/observability/servicemonitors.yaml and prometheus-rules.yaml.
+    # Prevents the chart from also scraping/alerting on unrelated
+    # resources in other namespaces if this cluster hosts more than futbot.
+    serviceMonitorSelector:
+      matchLabels:
+        release: prometheus
+    serviceMonitorNamespaceSelector: {}
+    ruleSelector:
+      matchLabels:
+        release: prometheus
+    retention: 15d
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+
+grafana:
+  adminPassword: admin # change before any non-local use
+  defaultDashboardsEnabled: true
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      access: proxy
+      url: http://loki-gateway.futbot.svc.cluster.local
+      jsonData:
+        derivedFields:
+          - datasourceUid: jaeger
+            matcherRegex: '"correlation_id":"([0-9a-f]{32})"'
+            name: TraceID
+    - name: Jaeger
+      uid: jaeger
+      type: jaeger
+      access: proxy
+      url: http://jaeger.futbot.svc.cluster.local:16686
+  # The same two dashboards used in docker-compose
+  # (observability/grafana/dashboards/*.json) can be imported here too --
+  # either paste their JSON into a dashboards-provider ConfigMap, or
+  # import manually via the Grafana UI once it's up.
+
+alertmanager:
+  alertmanagerSpec:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi

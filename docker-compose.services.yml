@@ -1,7 +1,5 @@
-version: "3.8"
-
-# Phase 3 services — use with infra + optional legacy api for local RAG dev:
-#   docker compose -f docker-compose.infra.yml -f docker-compose.services.yml up -d
+# Complete Pitchside service stack. From repo root:
+#   docker compose up -d --build
 
 services:
   auth:
@@ -16,7 +14,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:8000/auth/oauth/google/callback}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:3000/api/auth/oauth/google/callback}
+      WEB_APP_URL: ${WEB_APP_URL:-http://localhost:3000}
     depends_on:
       postgres:
         condition: service_healthy
@@ -32,6 +31,8 @@ services:
     env_file:
       - .env
     environment:
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      DEBUG: ${DEBUG:-true}
       AUTH_SERVICE_URL: http://auth:8081
       CHAT_SERVICE_URL: http://chat:8082
       PROJECT_SERVICE_URL: http://project:8083
@@ -42,6 +43,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
       ANON_MESSAGE_LIMIT: ${ANON_MESSAGE_LIMIT:-10}
+      ENV_FILE: /app/.env
     depends_on:
       - auth
       - chat
@@ -49,6 +51,8 @@ services:
       - observability
     ports:
       - "8000:8000"
+    volumes:
+      - ./.env:/app/.env
 
   rag-orchestrator:
     build:
@@ -62,6 +66,10 @@ services:
       LLM_PROVIDER: ${LLM_PROVIDER:-local}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       TRACE_DB_PATH: /data/trace_logs.db
+      PROMPTS_FILE: /app/services/llm_gateway/prompts.txt
+      LLM_MAX_INPUT_TOKENS: ${LLM_MAX_INPUT_TOKENS:-12000}
+      LLM_CONTEXT_TOKEN_BUDGET: ${LLM_CONTEXT_TOKEN_BUDGET:-6000}
+      LLM_REWRITER_CONTEXT_BUDGET: ${LLM_REWRITER_CONTEXT_BUDGET:-3000}
     depends_on:
       - retrieval
       - llm-gateway
@@ -70,6 +78,7 @@ services:
       - "8084:8084"
     volumes:
       - trace_data:/data
+      - ./services/llm_gateway/prompts.txt:/app/services/llm_gateway/prompts.txt:ro
 
   observability:
     build:
@@ -114,8 +123,14 @@ services:
       LLM_PROVIDER: ${LLM_PROVIDER:-local}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       LLM_RATE_LIMIT_RPM: ${LLM_RATE_LIMIT_RPM:-60}
+      PROMPTS_FILE: /app/services/llm_gateway/prompts.txt
+      LLM_MAX_INPUT_TOKENS: ${LLM_MAX_INPUT_TOKENS:-12000}
+      LLM_CONTEXT_TOKEN_BUDGET: ${LLM_CONTEXT_TOKEN_BUDGET:-6000}
+      LLM_REWRITER_CONTEXT_BUDGET: ${LLM_REWRITER_CONTEXT_BUDGET:-3000}
     ports:
       - "8087:8087"
+    volumes:
+      - ./services/llm_gateway/prompts.txt:/app/services/llm_gateway/prompts.txt:ro
 
   retrieval:
     build:
@@ -133,6 +148,25 @@ services:
       - "8085:8085"
     volumes:
       - retrieval_data:/data
+
+  kb-seed:
+    profiles: ["seed"]
+    build:
+      context: .
+      dockerfile: services/ingestion/Dockerfile
+    env_file:
+      - .env
+    environment:
+      RETRIEVAL_SERVICE_URL: http://retrieval:8085
+      GLOBAL_KB_CSV: /data/final-articles.csv
+      PYTHONPATH: /app
+    volumes:
+      - ./final-articles.csv:/data/final-articles.csv:ro
+      - ./scripts/seed_global_kb.py:/app/scripts/seed_global_kb.py:ro
+    command: ["python", "scripts/seed_global_kb.py", "--csv", "/data/final-articles.csv"]
+    depends_on:
+      - retrieval
+    restart: "no"
 
   tools:
     build:
@@ -166,12 +200,15 @@ services:
       MINIO_SECURE: "false"
       LLM_PROVIDER: ${LLM_PROVIDER:-local}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
+      PROMPTS_FILE: /app/services/llm_gateway/prompts.txt
     depends_on:
       - retrieval
       - minio
       - llm-gateway
     ports:
       - "8086:8086"
+    volumes:
+      - ./services/llm_gateway/prompts.txt:/app/services/llm_gateway/prompts.txt:ro
 
   project:
     build:
@@ -216,6 +253,10 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
 
   redis:
     image: redis:7-alpine
@@ -224,6 +265,10 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
 
   qdrant:
     image: qdrant/qdrant:v1.12.5
@@ -232,7 +277,20 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
 
+  web:
+    build:
+      context: ./services/web
+      dockerfile: Dockerfile
+    environment:
+      API_URL: http://gateway:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - gateway
+
 volumes:
+  postgres_data:
+  redis_data:
   minio_data:
   retrieval_data:
   qdrant_data:

@@ -47,7 +47,7 @@ async def create_user(
         email=email.lower(),
         first_name=first_name.strip(),
         password_hash=hash_password(password),
-        status="pending_2fa",
+        status="pending_verification",
         totp_enabled=False,
     )
     session.add(user)
@@ -107,8 +107,10 @@ async def issue_token_pair(session: AsyncSession, user: User) -> dict[str, str |
 
 
 async def enable_2fa(session: AsyncSession, user: User) -> dict[str, object]:
-    if user.status != "pending_2fa" and not user.totp_enabled:
-        pass
+    if user.status != "active":
+        raise AuthError("INVALID_STATE", "Account must be active", 400)
+    if user.totp_enabled:
+        raise AuthError("INVALID_STATE", "2FA already enabled", 400)
     secret = pyotp.random_base32()
     user.totp_secret_encrypted = encrypt_totp_secret(secret)
     codes = generate_recovery_codes()
@@ -130,6 +132,13 @@ def verify_totp(user: User, code: str) -> bool:
     return pyotp.TOTP(secret).verify(code, valid_window=1)
 
 
+async def activate_user(session: AsyncSession, user: User) -> User:
+    user.status = "active"
+    await session.commit()
+    await session.refresh(user)
+    return user
+
+
 async def activate_user_after_2fa(session: AsyncSession, user: User) -> User:
     user.totp_enabled = True
     user.status = "active"
@@ -146,9 +155,31 @@ async def authenticate_password(
         raise AuthError("INVALID_CREDENTIALS", "Invalid email or password", 401)
     if not verify_password(password, user.password_hash):
         raise AuthError("INVALID_CREDENTIALS", "Invalid email or password", 401)
-    if user.status == "pending_2fa":
-        raise AuthError("SETUP_REQUIRED", "Complete 2FA setup first", 403)
+    if user.status == "pending_verification":
+        raise AuthError(
+            "VERIFY_REQUIRED",
+            "Verify your email before signing in.",
+            403,
+        )
+    if user.status != "active":
+        raise AuthError("UNAUTHORIZED", "Account is not active.", 403)
     return user
+
+
+async def verify_recovery_code(session: AsyncSession, user: User, code: str) -> bool:
+    code_hash = hash_token(code.strip())
+    stored = await session.scalar(
+        select(RecoveryCode).where(
+            RecoveryCode.user_id == user.id,
+            RecoveryCode.code_hash == code_hash,
+            RecoveryCode.used_at.is_(None),
+        )
+    )
+    if not stored:
+        return False
+    stored.used_at = datetime.now(timezone.utc)
+    await session.commit()
+    return True
 
 
 def parse_bearer_token(authorization: str | None, expected_type: str) -> dict:

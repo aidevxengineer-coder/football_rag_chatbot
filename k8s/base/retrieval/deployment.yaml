@@ -24,6 +24,10 @@ spec:
     metadata:
       labels:
         app: retrieval
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8085"
+        prometheus.io/path: "/metrics"
     spec:
       containers:
         - name: retrieval
@@ -34,6 +38,9 @@ spec:
           envFrom:
             - secretRef:
                 name: retrieval-secret
+          env:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector:4317"
           volumeMounts:
             - name: retrieval-data
               mountPath: /data
@@ -43,6 +50,13 @@ spec:
               port: 8085
             initialDelaySeconds: 10
             periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8085
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            failureThreshold: 3
       volumes:
         - name: retrieval-data
           emptyDir: {}

@@ -1,6 +1,6 @@
 generate a presentation with the below stated outline:
 
-Topic: FutBot - Agentic RAG Football Chatbot: Internal Architecture & Anti-Hallucination Design
+Topic: Pitchside - Agentic RAG Football Chatbot: Internal Architecture & Anti-Hallucination Design
 Audience: professional
 Length: 5-15 pages
 Style: minimalist, football-themed
@@ -9,7 +9,7 @@ Design Type: presentation
 
 Presentation Outlines:
 
-Slide 1: FutBot
+Slide 1: Pitchside
   Description: - Agentic RAG Chatbot for Football Intelligence
 - Subtitle: Internal Architecture & Anti-Hallucination Design
 - LangGraph-Orchestrated Multi-Agent Pipeline
@@ -19,7 +19,7 @@ Slide 2: The Problem: Why Football Needs a Smarter Chatbot
   Description: - Football is a stats-dense, fact-critical domain
 - LLMs hallucinate player names, match results, and statistics with confidence
 - A naive chatbot is worse than no chatbot when fans can spot wrong answers immediately
-- FutBot's mission: factually verified football intelligence on every response
+- Pitchside's mission: factually verified football intelligence on every response
 
 Slide 3: The Pipeline at a Glance
   Description: - Seven-stage end-to-end architecture
@@ -103,11 +103,11 @@ Slide 11: Key Design Decisions: The Full Picture
 - Normalized SQL logging over flat JSON: analytics-ready, not just debuggable
 - Every decision traces back to one goal: factual accuracy in a zero-tolerance domain
 
-Slide 12: FutBot — Built to Get Football Right
+Slide 12: Pitchside — Built to Get Football Right
   Description: - Seven tightly integrated stages each with deliberate design choices
 - From BM25 title boosting at index time to the Judge's thinking-mode verification
 - No component is accidental — every node earns its place in the pipeline
-- Football fans will not tolerate wrong answers. FutBot is engineered to never give one.
+- Football fans will not tolerate wrong answers. Pitchside is engineered to never give one.
 
 * Keep text on slides minimal.
 * Use /presentation-design-expert, /scientific-slides, and use the design of the attached presentation.

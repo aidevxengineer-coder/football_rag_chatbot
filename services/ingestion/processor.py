@@ -90,12 +90,14 @@ def _process_path(*, project_id: str, file_id: str, filename: str, path: str) ->
         file_id=file_id,
         chunks=payload_chunks,
     )
+    tokens_indexed = sum(int(c.get("token_count") or 0) for c in payload_chunks)
     duration_ms = int((time.monotonic() - started) * 1000)
     return {
         "status": "success",
         "filename": filename,
         "file_type": file_type,
         "chunks_indexed": indexed,
+        "tokens_indexed": tokens_indexed,
         "relevance_verdict": verdict,
         "duration_ms": duration_ms,
     }

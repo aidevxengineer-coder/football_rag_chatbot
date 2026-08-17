@@ -16,13 +16,16 @@ from services.llm_gateway.components import (
     ToolPlanner,
 )
 from services.llm_gateway.provider import MODEL_GENERATOR, invoke_llm
+from services.llm_gateway.prompt_loader import get_prompt_parts
+from services.chat.config import settings as chat_settings
 from services.chat.conversation import ConversationContext
 from services.observability.trace_store import PipelineRunLogger
 from services.rag_orchestrator.config import settings
 from services.rag_orchestrator import tool_client
 from services.rag_orchestrator.pipeline_events import emit_event
 
-from services.llm_gateway.prompt_loader import get_prompt, get_prompt_parts
+from services.rag_orchestrator.responses import normalize_kb_miss_response
+from services.rag_orchestrator.retrieval_scope import resolve_retrieval_project_ids
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +54,7 @@ class GraphState(TypedDict, total=False):
     loop_traces: List[Dict[str, Any]]
 
     project_id: Optional[str]
+    user_id: Optional[str]
 
     # Internal iteration DB ID (for linking retrieval back to the iteration row)
     current_iteration_id: Optional[int]
@@ -138,11 +142,19 @@ def rewrite_node(state: GraphState) -> GraphState:
     rewriter = QueryRewriter()
     query = state.get("query", "")
     context = state.get("context_messages", [])
+    if not context:
+        all_messages = state.get("all_messages", [])
+        hot_window = chat_settings.hot_context_window
+        context = all_messages[-hot_window:] if hot_window > 0 else all_messages
     snapshot = state.get("snapshot") or "{}"
+    judge_feedback = ""
+    if retry_count > 0:
+        judge_feedback = state.get("judge_reasoning", "") or ""
     rewritten = rewriter.rewrite(
         query,
         context,
         snapshot=snapshot,
+        judge_feedback=judge_feedback,
         run_logger=run_logger,
         iteration=iteration,
     )
@@ -211,20 +223,35 @@ def simple_responder_node(state: GraphState) -> GraphState:
         system_prompt=system_prompt,
     )
 
+    if not (answer or "").strip():
+        answer = (
+            "I couldn't generate a response. Check LLM_PROVIDER and API keys, "
+            "then try again."
+        )
     _emit_stage(state, "responding", "complete", {"response": answer})
     return {"final_answer": answer}
 
 def _fetch_retrieval_chunks(state: GraphState) -> tuple[list[Dict[str, Any]], list[Dict[str, Any]]]:
     run_logger = state.get("run_logger")
-    query = state.get("rewritten_query", "")
+    query = (state.get("rewritten_query") or state.get("query") or "").strip()
     iteration = state.get("retry_count", 0) + 1
     iteration_id = state.get("current_iteration_id")
     chunks: list[Dict[str, Any]] = []
 
+    if not query:
+        logger.warning("Retrieval skipped: empty query after rewrite")
+        return chunks, list(state.get("loop_traces", []))
+
     try:
-        payload: dict[str, Any] = {"query": query, "top_k": 15}
-        if state.get("project_id"):
-            payload["project_id"] = state["project_id"]
+        project_ids = resolve_retrieval_project_ids(
+            project_id=state.get("project_id"),
+            user_id=state.get("user_id"),
+        )
+        payload: dict[str, Any] = {
+            "query": query,
+            "top_k": settings.retrieval_top_k,
+            "project_ids": project_ids,
+        }
         response = httpx.post(
             f"{settings.retrieval_service_url.rstrip('/')}/retrieve",
             json=payload,
@@ -400,6 +427,12 @@ def draft_node(state: GraphState) -> GraphState:
         run_logger=run_logger,
         iteration=iteration,
     )
+    draft = normalize_kb_miss_response(
+        draft,
+        web_search_enabled=bool(state.get("web_search_enabled")),
+        chunks=state.get("retrieved_chunks", []),
+        tool_results=state.get("tool_results", []),
+    )
     _emit_stage(state, "drafting", "complete", {"draft_answer": draft})
     return {"draft_answer": draft}
 
@@ -561,6 +594,7 @@ def run_pipeline(
     snapshot: str = "",
     snapshot_turn_count: int = 0,
     project_id: str | None = None,
+    user_id: str | None = None,
     web_search_enabled: bool = False,
 ) -> dict[str, Any]:
     """Run the full RAG pipeline."""
@@ -578,6 +612,7 @@ def run_pipeline(
             "context_messages": [],
             "session_id": session_id,
             "project_id": project_id,
+            "user_id": user_id,
             "run_logger": run_logger,
             "retry_count": 0,
             "loop_traces": [],

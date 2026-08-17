@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: observability-config
+  namespace: futbot
+data:
+  TRACE_DB_PATH: "/data/trace_logs.db"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: observability
+  namespace: futbot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: observability
+  template:
+    metadata:
+      labels:
+        app: observability
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8090"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: observability
+          image: futbot-observability:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8090
+          envFrom:
+            - configMapRef:
+                name: observability-config
+          env:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector:4317"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8090
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8090
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            failureThreshold: 3
+          volumeMounts:
+            - name: trace-data
+              mountPath: /data
+      volumes:
+        - name: trace-data
+          persistentVolumeClaim:
+            claimName: trace-data
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: observability
+  namespace: futbot
+spec:
+  selector:
+    app: observability
+  ports:
+    - port: 8090
+      targetPort: 8090

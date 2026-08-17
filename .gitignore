@@ -12,3 +12,5 @@ trace_logs.db
 data/
 skills/*
 futbot-venv/
+services/web/node_modules/
+services/web/.next/

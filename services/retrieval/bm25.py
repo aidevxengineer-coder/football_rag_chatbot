@@ -1,8 +1,11 @@
+import logging
 import os
 import pickle
 from typing import Any, Optional
 
 from rank_bm25 import BM25Okapi
+
+logger = logging.getLogger(__name__)
 
 
 class BM25Store:
@@ -92,23 +95,27 @@ class BM25Store:
 
     def save(self, path: str) -> None:
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        with open(path, "wb") as f:
-            pickle.dump(
-                {
-                    "bm25": self._bm25,
-                    "chunk_ids": self._chunk_ids,
-                    "corpus": self._corpus,
-                    "project_ids": self._project_ids,
-                    "metadatas": self._metadatas,
-                },
-                f,
-            )
+        tmp_path = f"{path}.tmp"
+        payload = {
+            "bm25": self._bm25,
+            "chunk_ids": self._chunk_ids,
+            "corpus": self._corpus,
+            "project_ids": self._project_ids,
+            "metadatas": self._metadatas,
+        }
+        with open(tmp_path, "wb") as f:
+            pickle.dump(payload, f)
+        os.replace(tmp_path, path)
 
     def load(self, path: str) -> bool:
         if not os.path.exists(path):
             return False
-        with open(path, "rb") as f:
-            data = pickle.load(f)
+        try:
+            with open(path, "rb") as f:
+                data = pickle.load(f)
+        except (EOFError, pickle.UnpicklingError, KeyError, ValueError) as exc:
+            logger.warning("Corrupt BM25 index at %s (%s); starting fresh", path, exc)
+            return False
         self._bm25 = data["bm25"]
         self._chunk_ids = data["chunk_ids"]
         self._corpus = data["corpus"]

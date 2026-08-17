@@ -1,4 +1,6 @@
 import asyncio
+import json
+import logging
 import os
 from typing import Callable
 from urllib.parse import urlparse
@@ -7,10 +9,16 @@ import httpx
 import websockets
 from fastapi import FastAPI, Query, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
 from starlette.background import BackgroundTask
 
-from futbot_common import CorrelationIdMiddleware
+from futbot_common import (
+    CorrelationIdMiddleware,
+    configure_logging,
+    configure_tracing,
+    is_dev_mode,
+    register_exception_handlers,
+    setup_metrics,
+)
 from futbot_common.context import CORRELATION_ID_HEADER
 from futbot_common.models import HealthResponse
 from futbot_common.responses import ErrorBody, ErrorResponse
@@ -22,10 +30,12 @@ from services.gateway.middleware import (
 )
 from services.gateway.routing import (
     ACTIVE_PREFIXES,
-    FRONTEND_DIR,
     NOT_IMPLEMENTED_PREFIXES,
     SERVICE_ROUTES,
 )
+from services.gateway.settings_routes import router as settings_router
+
+logger = logging.getLogger(__name__)
 
 _client: httpx.AsyncClient | None = None
 
@@ -33,7 +43,7 @@ _client: httpx.AsyncClient | None = None
 def _get_client() -> httpx.AsyncClient:
     global _client
     if _client is None:
-        _client = httpx.AsyncClient(timeout=60.0)
+        _client = httpx.AsyncClient(timeout=300.0)
     return _client
 
 
@@ -60,12 +70,41 @@ async def _proxy(request: Request, upstream_base: str) -> Response:
         headers["X-User-ID"] = user_id
 
     body = await request.body()
-    upstream = await client.request(
-        request.method,
-        url,
-        headers=headers,
-        content=body,
-    )
+    try:
+        upstream = await client.request(
+            request.method,
+            url,
+            headers=headers,
+            content=body,
+        )
+    except httpx.HTTPError as exc:
+        logger.exception("Upstream request failed: %s %s", request.method, url)
+        message = str(exc) if is_dev_mode() else "Upstream service unavailable."
+        return JSONResponse(
+            status_code=502,
+            content=ErrorResponse(
+                error=ErrorBody(code="UPSTREAM_UNAVAILABLE", message=message)
+            ).model_dump(),
+        )
+
+    content = upstream.content
+    if upstream.status_code >= 500 and is_dev_mode():
+        try:
+            payload = upstream.json()
+        except json.JSONDecodeError:
+            payload = None
+        if isinstance(payload, dict) and "error" not in payload:
+            detail = payload.get("detail")
+            if detail:
+                content = ErrorResponse(
+                    error=ErrorBody(
+                        code="UPSTREAM_ERROR",
+                        message=str(detail),
+                        details=[{"upstream_status": upstream.status_code, "upstream_url": url}],
+                    )
+                ).model_dump(mode="json")
+                content = json.dumps(content).encode("utf-8")
+
     response_headers = {
         k: v
         for k, v in upstream.headers.items()
@@ -75,7 +114,7 @@ async def _proxy(request: Request, upstream_base: str) -> Response:
         response_headers[CORRELATION_ID_HEADER] = correlation_id
 
     return Response(
-        content=upstream.content,
+        content=content,
         status_code=upstream.status_code,
         headers=response_headers,
         background=BackgroundTask(upstream.aclose),
@@ -83,18 +122,27 @@ async def _proxy(request: Request, upstream_base: str) -> Response:
 
 
 def create_app() -> FastAPI:
+    configure_logging("gateway")
     app = FastAPI(title="FutBot Gateway")
+    configure_tracing(app, "gateway")
     app.add_middleware(AnonMessageLimitMiddleware)
     app.add_middleware(LoginRequiredMiddleware)
     app.add_middleware(CorrelationIdMiddleware)
-
-    static_dir = FRONTEND_DIR / "static"
-    if static_dir.is_dir():
-        app.mount("/static", StaticFiles(directory=static_dir), name="static")
+    setup_metrics(app, "gateway")
+    register_exception_handlers(app)
 
     @app.get("/health", response_model=HealthResponse)
     def health() -> HealthResponse:
         return HealthResponse(status="ok", service="gateway")
+
+    @app.get("/")
+    def root() -> dict[str, str]:
+        return {
+            "service": "gateway",
+            "status": "ok",
+            "docs": "/docs",
+            "ui": "Pitchside web service (:3000)",
+        }
 
     @app.websocket("/ws/pipeline")
     async def ws_pipeline_proxy(
@@ -124,6 +172,8 @@ def create_app() -> FastAPI:
         except Exception:
             await websocket.close()
 
+    app.include_router(settings_router)
+
     @app.api_route(
         "/{full_path:path}",
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
@@ -147,12 +197,6 @@ def create_app() -> FastAPI:
         active = _match_prefix(path, ACTIVE_PREFIXES)
         if active:
             return await _proxy(request, SERVICE_ROUTES[active])
-
-        if path == "/" or path == "/index.html":
-            index = FRONTEND_DIR / "index.html"
-            if index.is_file():
-                return Response(content=index.read_bytes(), media_type="text/html")
-            return JSONResponse(status_code=404, content={"error": "frontend not found"})
 
         return JSONResponse(
             status_code=404,

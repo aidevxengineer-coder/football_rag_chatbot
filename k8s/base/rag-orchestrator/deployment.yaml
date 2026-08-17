@@ -1,0 +1,90 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rag-orchestrator-config
+  namespace: futbot
+data:
+  RETRIEVAL_SERVICE_URL: "http://retrieval:8085"
+  TOOLS_SERVICE_URL: "http://tools:8088"
+  TRACE_DB_PATH: "/data/trace_logs.db"
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: trace-data
+  namespace: futbot
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-orchestrator
+  namespace: futbot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rag-orchestrator
+  template:
+    metadata:
+      labels:
+        app: rag-orchestrator
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8084"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: rag-orchestrator
+          image: futbot-rag-orchestrator:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8084
+          envFrom:
+            - configMapRef:
+                name: rag-orchestrator-config
+            - secretRef:
+                name: llm-gateway-secret
+          env:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector:4317"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8084
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8084
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            failureThreshold: 3
+          volumeMounts:
+            - name: trace-data
+              mountPath: /data
+      volumes:
+        - name: trace-data
+          persistentVolumeClaim:
+            claimName: trace-data
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-orchestrator
+  namespace: futbot
+spec:
+  selector:
+    app: rag-orchestrator
+  ports:
+    - port: 8084
+      targetPort: 8084

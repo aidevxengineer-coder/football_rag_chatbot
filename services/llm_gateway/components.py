@@ -11,21 +11,25 @@ from services.llm_gateway.provider import (
     invoke_llm,
     parse_snapshot_json,
 )
+from services.llm_gateway.token_budget import (
+    build_context_text_within_budget,
+    fit_messages_for_prompt,
+    trim_preserve_edges,
+)
 
 
 def build_context_text(
     chunks: list[dict[str, Any]],
     tool_results: list[dict[str, Any]] | None = None,
+    *,
+    max_tokens: int | None = None,
 ) -> str:
-    parts: list[str] = []
-    for tr in tool_results or []:
-        payload = tr.get("result") if isinstance(tr.get("result"), dict) else tr
-        parts.append(f"[TOOL: {tr.get('tool', 'unknown')}]\n{json.dumps(payload, indent=2)}")
-    for chunk in chunks:
-        parts.append(
-            f"Source [{chunk.get('chunk_id', 'unknown')}]:\n{chunk.get('document', '')}"
-        )
-    return "\n\n".join(parts) if parts else "(no context provided)"
+    budget = max_tokens if max_tokens is not None else settings.llm_context_token_budget
+    return build_context_text_within_budget(
+        chunks,
+        tool_results,
+        max_tokens=budget,
+    )
 
 
 class SnapshotCompressor:
@@ -61,15 +65,28 @@ class QueryRewriter:
         query: str,
         context_messages: list[dict[str, str]],
         snapshot: str = "",
+        judge_feedback: str = "",
         run_logger=None,
         iteration: int = 0,
     ) -> str:
-        history_text = "\n".join([f"{m['role']}: {m['content']}" for m in context_messages])
+        fitted_snapshot = trim_preserve_edges(
+            snapshot or "{}",
+            max(256, settings.llm_rewriter_context_budget // 3),
+        )
+        history_text = fit_messages_for_prompt(
+            context_messages,
+            max_tokens=max(256, settings.llm_rewriter_context_budget // 2),
+        )
+        feedback_text = trim_preserve_edges(
+            judge_feedback.strip(),
+            max(128, settings.llm_rewriter_context_budget // 4),
+        )
         system_prompt, user_template = get_prompt_parts("REWRITER")
         user_content = user_template.format(
-            snapshot=snapshot or "{}",
+            snapshot=fitted_snapshot,
             history_text=history_text,
             query=query,
+            judge_feedback=feedback_text or "None",
         )
         return invoke_llm(
             user_content,
@@ -170,9 +187,13 @@ class DecisionJudge:
         iteration: int = 0,
     ) -> dict[str, str]:
         context_text = build_context_text(chunks, tool_results)
+        trimmed_draft = trim_preserve_edges(
+            draft,
+            settings.llm_judge_draft_token_budget,
+        )
         system_prompt, user_template = get_prompt_parts("DECISION_JUDGE")
         user_content = user_template.format(
-            context_text=context_text, query=query, draft=draft
+            context_text=context_text, query=query, draft=trimmed_draft
         )
         result = invoke_llm(
             user_content,

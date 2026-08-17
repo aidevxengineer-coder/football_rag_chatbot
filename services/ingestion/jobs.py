@@ -12,6 +12,7 @@ class IngestJob:
     filename: str
     storage_key: str
     content_hash: str = ""
+    scope: str = "project"
     status: str = "pending"
     chunks_indexed: int = 0
     error_message: str | None = None

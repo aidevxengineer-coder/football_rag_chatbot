@@ -51,3 +51,27 @@ class ProjectContextResponse(BaseModel):
     project: ProjectResponse
     files: list[ProjectFileResponse]
     memory: list[MemoryItemResponse]
+
+
+class KnowledgeFileResponse(BaseModel):
+    id: str
+    filename: str
+    content_hash: str
+    status: str
+    error_message: str | None = None
+    chunks_indexed: int = 0
+    tokens_indexed: int = 0
+    created_at: datetime
+
+
+class KnowledgeStatsResponse(BaseModel):
+    chunks: int
+    files: int
+    memory_tokens: int
+
+
+class UpdateKnowledgeFileStatusRequest(BaseModel):
+    status: str = Field(min_length=1, max_length=32)
+    error_message: str | None = None
+    chunks_indexed: int | None = None
+    tokens_indexed: int | None = None

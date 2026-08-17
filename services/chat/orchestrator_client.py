@@ -11,6 +11,7 @@ def run_pipeline_sync(
     snapshot: str,
     snapshot_turn_count: int,
     project_id: str | None,
+    user_id: str | None = None,
     web_search_enabled: bool = False,
 ) -> dict:
     url = f"{settings.orchestrator_service_url.rstrip('/')}/pipeline/run"
@@ -23,6 +24,7 @@ def run_pipeline_sync(
             "snapshot": snapshot,
             "snapshot_turn_count": snapshot_turn_count,
             "project_id": project_id,
+            "user_id": user_id,
             "web_search_enabled": web_search_enabled,
         },
         timeout=300.0,

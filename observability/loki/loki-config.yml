@@ -1,0 +1,39 @@
+# Minimal single-binary Loki config for local dev -- filesystem storage,
+# no object store / distributed setup needed at this scale.
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+
+common:
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2020-10-24
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+limits_config:
+  # Every service already logs structured JSON to stdout (see
+  # futbot_common.logging_config) at a healthy volume for local dev --
+  # these limits are generous defaults, not tuned for production scale.
+  retention_period: 168h
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h
+
+compactor:
+  working_directory: /loki/compactor
+  retention_enabled: true

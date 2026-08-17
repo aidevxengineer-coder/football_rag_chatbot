@@ -1,0 +1,29 @@
+# Every service exports spans here (OTEL_EXPORTER_OTLP_ENDPOINT env var,
+# see futbot_common.tracing_config). The collector batches them and
+# forwards to Jaeger for viewing. Metrics/logs pipelines are left out on
+# purpose -- those already go straight to Prometheus (/metrics scrape)
+# and stdout respectively; this collector's only job right now is traces.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch: {}
+
+exporters:
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp/jaeger]

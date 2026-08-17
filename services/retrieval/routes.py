@@ -1,6 +1,8 @@
 import os
+import time
 
 from fastapi import APIRouter, Depends, HTTPException
+from prometheus_client import Histogram
 
 from futbot_common.responses import DataResponse
 from services.retrieval.config import settings
@@ -16,6 +18,21 @@ from services.retrieval.schemas import (
 )
 
 router = APIRouter(tags=["retrieve"])
+
+# How long a retrieval takes and how many chunks it returns -- generic
+# HTTP metrics (from futbot_common.setup_metrics) already cover request
+# latency for this route, but not "was this an empty/near-empty result",
+# which is the retrieval-specific signal worth alerting on.
+RETRIEVAL_DURATION_SECONDS = Histogram(
+    "futbot_retrieval_duration_seconds",
+    "Time spent in the retrieval engine per /retrieve call.",
+    buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5),
+)
+RETRIEVAL_CHUNKS_RETURNED = Histogram(
+    "futbot_retrieval_chunks_returned",
+    "Number of chunks returned per /retrieve call.",
+    buckets=(0, 1, 2, 5, 10, 20, 50),
+)
 
 
 def _chunk_metadata(chunk) -> dict:
@@ -37,7 +54,18 @@ def retrieve(
     body: RetrieveRequest,
     engine: RetrievalEngine = Depends(get_engine),
 ) -> DataResponse[RetrieveResponse]:
-    hits = engine.retrieve(body.query, top_k=body.top_k, project_id=body.project_id)
+    scopes = body.project_ids
+    if scopes is None and body.project_id is not None:
+        scopes = [body.project_id]
+    t0 = time.monotonic()
+    hits = engine.retrieve(
+        body.query,
+        top_k=body.top_k,
+        project_id=body.project_id,
+        project_ids=scopes,
+    )
+    RETRIEVAL_DURATION_SECONDS.observe(time.monotonic() - t0)
+    RETRIEVAL_CHUNKS_RETURNED.observe(len(hits))
     return DataResponse(
         data=RetrieveResponse(chunks=[RetrievedChunk(**h) for h in hits])
     )

@@ -7,6 +7,7 @@ class CreateJobRequest(BaseModel):
     filename: str
     storage_key: str
     content_hash: str = ""
+    scope: str = Field(default="project", pattern="^(project|user_kb)$")
 
 
 class JobResponse(BaseModel):

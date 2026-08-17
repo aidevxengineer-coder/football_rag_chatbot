@@ -66,7 +66,13 @@ def optional_user_id_from_jwt(request: Request) -> str | None:
 def _requires_login(path: str, method: str) -> bool:
     if path.startswith("/projects"):
         return True
+    if path.startswith("/knowledge"):
+        return True
+    if path.startswith("/settings"):
+        return True
     if method == "GET" and path.rstrip("/") == "/chats":
+        return True
+    if method == "POST" and path.rstrip("/") == "/chats/merge":
         return True
     if method == "DELETE" and path.startswith("/chats/"):
         return True

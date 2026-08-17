@@ -29,6 +29,10 @@ spec:
     metadata:
       labels:
         app: ingestion
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8086"
+        prometheus.io/path: "/metrics"
     spec:
       containers:
         - name: ingestion
@@ -39,12 +43,22 @@ spec:
           envFrom:
             - secretRef:
                 name: ingestion-secret
+          env:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector:4317"
           readinessProbe:
             httpGet:
               path: /health
               port: 8086
             initialDelaySeconds: 10
             periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8086
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            failureThreshold: 3
 
 ---
 apiVersion: v1

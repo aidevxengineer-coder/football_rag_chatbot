@@ -1,11 +1,62 @@
-# FutBot UI Requirements
+# Pitchside UI Requirements
 
 **Status:** Living document — updated as each backend phase lands.  
 **Purpose:** Collect every UI-facing requirement discovered during Phases 0–7 so Phase 8 can implement the full frontend in one pass without re-reading ADRs, plans, or service code.
 
-**Related:** Microservices architecture plan (`.cursor/plans/`) · [ADR-001](adr/ADR-001-service-boundaries.md) · [ADR-002](adr/ADR-002-auth-and-gateway.md) · [football_rag_prd.md](football_rag_prd.md) · `frontend/` (legacy monolith UI)
+**Related:** Microservices architecture plan (`.cursor/plans/`) · [ADR-001](adr/ADR-001-service-boundaries.md) · [ADR-002](adr/ADR-002-auth-and-gateway.md) · [football_rag_prd.md](football_rag_prd.md) · `pitchai-analyst.html` (design reference) · Next.js app (Phase 8, replaces legacy `frontend/`)
 
 ---
+
+## Phase 8 — Locked design decisions (2026-07-16)
+
+| Area | Decision |
+|------|----------|
+| **Framework** | Next.js — scrap legacy `frontend/` |
+| **Brand** | **Pitchside** (from `pitchai-analyst.html`) |
+| **Design reference** | `pitchai-analyst.html` — evolve via 21st.dev Magic MCP |
+| **Layout** | Control room (Option B) + search field in left panel (Option A) |
+| **Left panel** | Football-themed copy: **Kickoff** (create chat), Match History (with relative time labels: `12h` / `10m` / `2d`), Your Leagues, Ball Knowledge, Live Events — **not** "New Chat" |
+| **Pitch canvas** | Ambient canvas animation: faint player nodes + ball-passing loop behind chat (`#pitch-anim` in `pitchai-analyst.html`). Prefer `prefers-reduced-motion` off in Next.js production build. |
+| **Left panel search** | `Search matches…` filter above match history list |
+| **Right panel title** | **Match Status** (pipeline / WS stage cards) |
+| **Auth UI** | Reference: `auth-reference.html` (matches `auth ss.png` + `theme.css` dark tokens). Register card with **Google** OAuth only, **first name**, email/password, primary CTA. Modal over blurred/darkened chat. Empty-field warnings use themed tooltips (`--destructive` / `--popover`), not browser defaults. |
+| **Anon users** | `POST /chats` without JWT; merge on login via `POST /chats/merge` (to build) |
+| **Sidebar auth CTA** | When **not logged in**, footer shows **Sign up** (opens auth modal). When logged in, same slot shows **Logout**. Auth modal toggles Sign up ↔ Sign in (no first name on Sign in; Google OAuth on both). |
+| **Leagues screen** | Sidebar stays; main replaces chat with Projects-style layout (title, sort, New league, search, cards). Maps to `GET/POST /projects`. |
+| **Ball Knowledge screen** | Sidebar stays; Match Status hidden. **User-account RAG knowledge** (not league/project). Drag-drop upload + stats: Chunks / Files / Memory Tokens for the **logged-in user**. See [Ball Knowledge backend](#ball-knowledge-backend). |
+| **Settings screen** | Sidebar stays; Match Status hidden. API keys form; **any logged-in user**. Prefill/save via `GET/PUT /settings/api-keys`. **Hidden when logged out.** |
+| **SPA** | Single Next.js app; auth as in-app modal (not separate pages). Soft routes; design from HTML mocks. |
+| **Web search toggle** | Pill **to the right** of disclaimer: `AI analysis can make mistakes…` \| `[ Web search ]` |
+| **HCI / anti-AI** | One pitch-green accent; labels not icon-only; flat pipeline cards; no sparkles / robot avatars |
+| **Phase 8 plan** | [PHASE_8_PLAN.md](PHASE_8_PLAN.md) — full locked Q&A + workstreams |
+
+### Input footer row
+
+```
+[ liquid-glass input pill ]
+AI analysis can make mistakes. Verify critical match data.     [ Web search ]
+← disclaimer (left)                                              toggle (right) →
+```
+
+### Left sidebar structure (Control room + search)
+
+1. Pitchside wordmark  
+2. **Kickoff** CTA (liquid glass + football icon)  
+3. Search field  
+4. **Match History** (section, expandable) — chat list from `GET /chats`  
+5. **Leagues** — projects (`GET /projects`); opens Leagues screen  
+6. **Ball Knowledge** — opens knowledge screen (upload + stats) for active league  
+7. **Settings** — opens Settings screen (API keys)  
+8. **Live Events** — football context / MCP hooks  
+9. Footer: Help · **Sign up** (anon) or **Logout** (authenticated)
+
+### Right panel — Match Status
+
+- Header: **Match Status** + run metadata (classification chip, iteration)  
+- Stage cards with left accent bar: done / active / pending / failed  
+- Tool stages as first-class rows (`tool:web_search`, etc.)  
+- Active card shows live detail (query snippet, chunk count)
+
 
 ## Maintenance process
 
@@ -25,9 +76,9 @@ Inherited from the existing monolith UI and PRD; Phase 8 should preserve or evol
 
 | Area | Requirement |
 |------|-------------|
-| **Visual style** | Claude-like chat layout; football theme — dark green / pitch-inspired palette, ⚽ iconography |
-| **Typography** | Inter (already loaded in `frontend/index.html`) |
-| **Layout** | Three-column on desktop: **sidebar** (nav + actions) · **main chat** · **pipeline / debug panel** |
+| **Visual style** | Pitchside — dark pitch palette, liquid-glass input, pitch-pattern canvas (`pitchai-analyst.html`) |
+| **Typography** | From `theme.css`: Montserrat (sans / body), Merriweather (serif / headlines), Source Code Pro (mono / labels); `letter-spacing: 0em` |
+| **Layout** | Three-column: **sidebar** (nav + search + match history) · **main chat** · **Match Status** panel |
 | **Responsive** | Collapsible sidebar via mobile menu button; chat remains primary on small screens |
 | **Message bubbles** | Distinct user vs assistant styling; assistant messages support streaming partial text |
 | **Welcome state** | Empty chat shows hero copy + suggested intent (football analyst positioning) |
@@ -50,7 +101,7 @@ Inherited from the existing monolith UI and PRD; Phase 8 should preserve or evol
 
 | ID | Requirement | API / notes |
 |----|-------------|-------------|
-| P0-01 | Gateway serves static `frontend/` at `/` and `/static/*` | No auth on static assets |
+| P0-01 | Gateway served static `frontend/` at `/` and `/static/*` | Retired by Phase 8; gateway is now API-only |
 | P0-02 | All non-auth API routes return `501` until their phase | UI must handle `501` gracefully if old endpoints are called |
 
 ---
@@ -197,8 +248,83 @@ Backend only. UI-relevant contracts for Phase 8 streaming.
 |----|-------------|-------------|
 | P5-01 | After file upload, show ingest progress | Poll `GET /projects/{id}/files` until `status` → `ingested` or `failed` |
 | P5-02 | Ingest failure shows error state on file row | `status=failed` + optional error message field |
-| P5-03 | “Add to knowledge base” action scoped to **current project** | Replaces monolith global ingest button |
+| P5-03 | Project file ingest (future project-open UI) | `POST /projects/{id}/files` — **not** Ball Knowledge |
 | P5-04 | Accepted formats: `.txt`, `.md`, `.csv`, `.xlsx`, `.pdf`, images | Match `accept` on file input |
+| P5-05 | Ball Knowledge drag-and-drop uploader | User-scoped `POST /knowledge/files` |
+| P5-06 | Ball Knowledge **Chunks / Files / Memory Tokens** | `GET /knowledge/stats` (per user) |
+
+---
+
+## Ball Knowledge backend
+
+Ball Knowledge is the **per-user RAG knowledge base** (account-scoped). It is **not** league/project data. Leagues (= projects) are separate; chats may exist with `project_id` null.
+
+| Metric | Ideal UI field | Backend work |
+|--------|----------------|--------------|
+| **Files** | Count of files in the user’s KB | User-scoped file list/metadata |
+| **Chunks** | Indexed chunk count for that user | Retrieval stats filtered by `user_id` |
+| **Memory Tokens** | Token total for the user’s knowledge/memory budget | Aggregate for that user (define in Phase 8 impl) |
+
+### Proposed API (Phase 8)
+
+| Method | Path | Auth |
+|--------|------|------|
+| `GET` | `/knowledge/stats` | JWT → `{ chunks, files, memory_tokens }` |
+| `GET` | `/knowledge/files` | JWT |
+| `POST` | `/knowledge/files` | JWT multipart upload + ingest |
+
+Do **not** use `GET /projects/{id}/knowledge-stats` for this screen. Project file APIs remain for a later project-open UI.
+
+**Implementation notes:** index chunks with `user_id` metadata; orchestrator may retrieve from user KB on chat turns; anon users must sign in to use Ball Knowledge.
+
+---
+
+## Settings / API keys backend
+
+Settings UI lets a self-hosted operator enter third-party keys used by LLM, tools, and OAuth. Keys today live only in repo-root `.env` (see `.env.example`). **There is no settings API yet** — Phase 8 UI mock exists in `pitchai-analyst.html`; backend must be added.
+
+### Keys exposed in Settings
+
+| Env var | Used by | Purpose |
+|---------|---------|---------|
+| `GROQ_API_KEY` | LLM gateway | Groq provider (`LLM_PROVIDER=groq`) |
+| `TAVILY_API_KEY` | Tools | Web search (Tavily) |
+| `SERPER_API_KEY` | Tools | Web search (Serper) |
+| `API_FOOTBALL_KEY` | Tools / MCP | API-Football MCP |
+| `GOOGLE_CLIENT_ID` | Auth | Google OAuth |
+| `GOOGLE_CLIENT_SECRET` | Auth | Google OAuth |
+
+Infra secrets (`JWT_SECRET`, Postgres, MinIO, Redis) stay out of this screen — deploy/ops only.
+
+### Proposed API (Phase 8 companion)
+
+| Method | Path | Auth | Behavior |
+|--------|------|------|----------|
+| `GET` | `/settings/api-keys` | JWT (any logged-in user) | Read allowlisted keys from server `.env`. Prefill Settings form. |
+| `PUT` | `/settings/api-keys` | JWT (any logged-in user) | Upsert provided keys into `.env` (merge). Return updated map. |
+
+```json
+{
+  "data": {
+    "GROQ_API_KEY": "gsk_…",
+    "TAVILY_API_KEY": "",
+    "SERPER_API_KEY": "…",
+    "API_FOOTBALL_KEY": "",
+    "GOOGLE_CLIENT_ID": "….apps.googleusercontent.com",
+    "GOOGLE_CLIENT_SECRET": "…"
+  }
+}
+```
+
+**Implementation notes:**
+
+1. **Gateway (or small config service)** — own routes; resolve `.env` path via `ENV_FILE` (default: repo/process working dir `.env`). Create from `.env.example` if missing.
+2. **GET when `.env` exists** — parse and return only the allowlisted keys above (empty string if unset). UI fills inputs. Prefer returning real values only for trusted self-host admin; optional `configured: true` + masked preview for multi-tenant later.
+3. **PUT** — validate key names against allowlist; update/insert lines in `.env`; never log raw secrets.
+4. **Runtime reload** — writing `.env` alone does not refresh already-running containers/processes. Options: (a) document restart required; (b) push updates into a shared secrets store / Redis and teach LLM/Tools/Auth to re-read; (c) hot-reload via SIGHUP where supported. Prefer (a) for v1 + toast “Restart services to apply.”
+5. **Docker** — Compose uses `env_file: .env`; after PUT, operator restarts affected services (`llm_gateway`, `tools`, `auth`) or the stack.
+6. **Security** — require authenticated user (any logged-in JWT per Phase 8 lock); never log raw secrets; CSRF on cookie sessions if used.  
+7. **UI** — Settings hidden when logged out; password-type inputs; Save → `PUT /settings/api-keys`.
 
 ---
 
@@ -246,26 +372,36 @@ Align with `docs/ENHANCEMENTS.md`:
 
 ## Phase 8 — Implementation checklist
 
-Master backlog for the full UI build. Order is suggested, not mandatory.
+Master backlog for the full UI build. See [PHASE_8_PLAN.md](PHASE_8_PLAN.md) for the locked plan.
 
 ### Shell & auth
-- [ ] P0-01–P0-02 — Gateway static hosting, 501 handling
-- [ ] P1 — Register, login, Google OAuth, 2FA setup, logout, `/auth/me`
+- [ ] Scaffold Next.js App Router as **`web` service** (Docker + K8s)
+- [ ] P1 — Register (incl. **first_name**), login, Google OAuth, **2FA**, logout, `/auth/me`
+- [ ] P1 — Auth **modal** over chat (SPA); Sign up ↔ Sign in
+- [ ] P1 — Sidebar: **Sign up** when anon; **Logout** when auth; **no Settings when logged out**
 - [ ] P1 — Token refresh + global `401` / `403 LOGIN_REQUIRED` handler
 
 ### Chat & sidebar
 - [ ] P2-01–P2-07 — Chat list, CRUD, export
-- [ ] P2-08–P2-13 — Anonymous flow + login prompt at limit
-- [ ] P2-21–P2-26 — **Context usage bar**
-- [ ] Replace `sess_*` local session with server `chat_id`
+- [ ] P2-08–P2-13 — Anonymous flow + auth modal at limit
+- [ ] **`POST /chats/merge`** on login
+- [ ] P2-21–P2-26 — Context usage bar
+- [ ] Soft routes: `/`, `/chat/[id]`, `/leagues`, `/knowledge`, `/settings`, `/help`
+- [ ] Leagues screen + empty state
+- [ ] Match Status + empty state
+- [ ] Ball Knowledge — user KB upload + stats
+- [ ] Settings — API keys via `/settings/api-keys`
+- [ ] Live Events — real MCP/tools data
+- [ ] Help — minimal themed page
 
-### Projects & files
-- [ ] P2-14–P2-20 — Project selector, CRUD, context view
-- [ ] P5-01–P5-04 — Upload + ingest status polling
+### Backend companions
+- [ ] User-scoped `/knowledge/*` — see [Ball Knowledge backend](#ball-knowledge-backend)
+- [ ] `GET/PUT /settings/api-keys` — see [Settings / API keys backend](#settings--api-keys-backend)
+- [x] Cutover: remove legacy `frontend/`; gateway is API-only
 
 ### RAG experience
 - [ ] P6-01–P6-09 — Pipeline send, streaming, citations, retry behavior
-- [ ] P6-02–P6-03 — Pipeline panel (reuse existing component)
+- [ ] P6-02–P6-03 — Match Status panel
 - [ ] P4-03, P6-07–P6-08 — Citation UI
 - [ ] P3-02 — Rate limit UX
 
@@ -274,9 +410,9 @@ Master backlog for the full UI build. Order is suggested, not mandatory.
 - [ ] P6-10–P6-11 — Optional trace debug panel
 
 ### Quality
-- [ ] Responsive sidebar (existing `toggleSidebar`)
-- [ ] Accessibility pass on new components
-- [ ] Contract tests (Pact) against gateway BFF
+- [ ] Responsive sidebar
+- [ ] Accessibility pass
+- [ ] Contract tests against gateway
 
 ---
 
@@ -302,6 +438,11 @@ Master backlog for the full UI build. Order is suggested, not mandatory.
 | Create project | POST | `/projects` | JWT | 2 |
 | Upload file | POST | `/projects/{id}/files` | JWT | 2 |
 | Project context | GET | `/projects/{id}/context` | JWT | 2 |
+| Knowledge stats | GET | `/knowledge/stats` | JWT | **TBD** Phase 8 |
+| Knowledge files | GET/POST | `/knowledge/files` | JWT | **TBD** Phase 8 |
+| API keys (settings) | GET | `/settings/api-keys` | JWT | **TBD** Phase 8 |
+| API keys (settings) | PUT | `/settings/api-keys` | JWT | **TBD** Phase 8 |
+| Chat merge | POST | `/chats/merge` | JWT | **TBD** Phase 8 |
 | List tools | GET | `/tools` | JWT | 7 |
 | Run pipeline | POST | `/pipeline/run` | JWT | 6 |
 | Pipeline WS | WS | `/ws/*` | Optional | 6 |
@@ -342,3 +483,7 @@ Budget = **full next-turn LLM prompt**: snapshot + hot messages + current query 
 | 2026-07-14 | 5 | Phase 5 implemented: ingestion service (async jobs), project upload auto-trigger, `error_message` on files, `/ingest/*` internal-only |
 | 2026-07-14 | 6 | Phase 6 implemented: RAG orchestrator (LangGraph), chat inline RAG on message POST, WS `/ws/pipeline`, observability `GET /traces/{id}`, monolith `/api/chat` → 501 |
 | 2026-07-15 | 7 | Phase 7 implemented: tools service (`:8088`), web search opt-in, football MCP, PDF export, TOOL pipeline path, `tool_notice` / `tool_calls` tracing, `GET /tools` on gateway |
+| 2026-07-16 | 8 | Phase 8 design locked: Next.js + Pitchside (`pitchai-analyst.html`), Control room + search, Match Status panel, sessionStorage auth, web search pill on disclaimer row |
+| 2026-07-16 | 8 | Auth modal + first_name; Login↔Logout sidebar CTA; Leagues screen; Ball Knowledge screen + documented `knowledge-stats` backend gap |
+| 2026-07-16 | 8 | Settings screen: API key fields; documented `GET/PUT /settings/api-keys` + `.env` sync |
+| 2026-07-16 | 8 | Phase 8 plan locked ([PHASE_8_PLAN.md](PHASE_8_PLAN.md)): SPA Next.js `web` service; Ball Knowledge = user RAG (not projects); full mock + companion APIs |

@@ -34,6 +34,15 @@ async def _call_sse_mcp_tool(url: str, tool_name: str, arguments: dict[str, Any]
             return {"content": str(result)}
 
 
+async def _call_sse_with_timeout(
+    url: str, tool_name: str, arguments: dict[str, Any]
+) -> Any:
+    return await asyncio.wait_for(
+        _call_sse_mcp_tool(url, tool_name, arguments),
+        timeout=settings.request_timeout_sec,
+    )
+
+
 async def _call_stdio_mcp_tool(
     command: str,
     args: list[str],
@@ -64,7 +73,7 @@ async def _call_stdio_mcp_tool(
 
 
 def call_sse_tool(url: str, tool_name: str, arguments: dict[str, Any]) -> Any:
-    return asyncio.run(_call_sse_mcp_tool(url, tool_name, arguments))
+    return asyncio.run(_call_sse_with_timeout(url, tool_name, arguments))
 
 
 def call_stdio_tool(

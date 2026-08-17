@@ -3,7 +3,9 @@ futbot_common/__init__.py
 futbot_common/app.py
 futbot_common/context.py
 futbot_common/errors.py
+futbot_common/exception_handlers.py
 futbot_common/jwt_tokens.py
+futbot_common/logging_config.py
 futbot_common/middleware.py
 futbot_common/models.py
 futbot_common/responses.py
